@@ -78,7 +78,7 @@ function validateConfig(raw: any): EvalConfig {
             throw new Error(`Task "${t.name}" must have at least one grader`);
         }
 
-        const workspace: WorkspaceMapping[] = (t.workspace || t.files || []).map((w: any) => {
+        const workspace: WorkspaceMapping[] = (t.workspace || []).map((w: any) => {
             if (typeof w === 'string') {
                 // Support shorthand: "fixtures/app.js" → same filename in workspace
                 return { src: w, dest: path.basename(w) };
@@ -98,6 +98,7 @@ function validateConfig(raw: any): EvalConfig {
                 setup: g.setup,
                 run: g.run,
                 rubric: g.rubric,
+                model: g.model,
                 weight: g.weight ?? 1.0,
             })),
             solution: t.solution,
@@ -139,6 +140,7 @@ export async function resolveTask(
             const resolved: ResolvedGrader = {
                 type: g.type,
                 setup: g.setup,
+                model: g.model,
                 weight: g.weight,
             };
             if (g.type === 'deterministic' && g.run) {

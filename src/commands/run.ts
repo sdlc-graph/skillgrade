@@ -252,6 +252,7 @@ function resolvedToTaskConfig(resolved: ResolvedTask): TaskConfig {
             type: g.type,
             command: g.type === 'deterministic' ? 'bash tests/test.sh' : undefined,
             rubric: g.type === 'llm_rubric' ? 'prompts/quality.md' : undefined,
+            model: g.model,
             weight: g.weight,
         })),
         agent: { timeout_sec: resolved.timeout },
