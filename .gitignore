@@ -16,6 +16,7 @@ dist/
 !package.json
 !tsconfig.json
 logs/
+converage
 
 # Environment and Secrets
 .env
