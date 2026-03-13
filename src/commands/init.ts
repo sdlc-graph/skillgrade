@@ -52,12 +52,16 @@ export async function runInit(dir: string) {
     }
   }
 
-  // Try LLM-powered scaffold
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (apiKey) {
-    console.log('  🤖 Generating eval tasks with AI...\n');
+  // Try LLM-powered scaffold — auto-detect from available API key
+  const geminiKey = process.env.GEMINI_API_KEY;
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const llmProvider = geminiKey ? 'gemini' : anthropicKey ? 'anthropic' : null;
+  const llmApiKey = geminiKey || anthropicKey;
+
+  if (llmProvider && llmApiKey) {
+    console.log(`  🤖 Generating eval tasks with ${llmProvider === 'gemini' ? 'Gemini' : 'Anthropic'}...\n`);
     try {
-      const config = await generateWithLLM(skills, apiKey);
+      const config = await generateWithLLM(skills, llmApiKey, llmProvider);
       await fs.writeFile(evalPath, config, 'utf-8');
       console.log(`  ✅ Created eval.yaml with AI-generated tasks`);
       console.log(`     Review and edit the file, then run: skilleval\n`);
@@ -67,7 +71,7 @@ export async function runInit(dir: string) {
       console.log('     Falling back to template.\n');
     }
   } else {
-    console.log('  💡 Set GEMINI_API_KEY for AI-powered eval generation.\n');
+    console.log('  💡 Set GEMINI_API_KEY or ANTHROPIC_API_KEY for AI-powered eval generation.\n');
   }
 
   // Fallback: template-based scaffold
@@ -130,7 +134,8 @@ function extractInstructionHint(skillMd: string): string {
  */
 async function generateWithLLM(
   skills: Array<{ name: string; skillMd: string }>,
-  apiKey: string
+  apiKey: string,
+  provider: 'gemini' | 'anthropic' = 'gemini'
 ): Promise<string> {
   const skillSummaries = skills.map(s =>
     `## Skill: ${s.name}\n\n${s.skillMd}`
@@ -212,22 +217,49 @@ tasks:
           <evaluation criteria>
         weight: 0.3`;
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.3 },
-    }),
-  });
+  let text: string;
 
-  if (!response.ok) {
-    throw new Error(`Gemini API returned ${response.status}`);
+  if (provider === 'anthropic') {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.3,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Anthropic API returned ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+    text = data.content?.[0]?.text;
+    if (!text) throw new Error('Empty response from Anthropic API');
+  } else {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.3 },
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Gemini API returned ${response.status}`);
+    }
+
+    const data = await response.json() as any;
+    text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) throw new Error('Empty response from Gemini API');
   }
-
-  const data = await response.json() as any;
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Empty response from Gemini API');
 
   // Extract YAML from response (strip markdown code fences if present)
   const yamlContent = text.replace(/```ya?ml\n?/g, '').replace(/```\n?/g, '').trim();
