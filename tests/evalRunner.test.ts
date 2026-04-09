@@ -318,4 +318,59 @@ describe('EvalRunner', () => {
 
     expect(report.trials[0].grader_results).toHaveLength(3);
   });
+
+  it('executes and logs trialConfig.cleanup in finally block', async () => {
+    const provider = makeMockProvider();
+    const agent = makeMockAgent();
+    const opts = makeEvalOpts({
+      trialConfig: {
+        cleanup: 'echo cleanup'
+      }
+    } as any);
+
+    const gradersModule = await import('../src/graders/index');
+    vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
+      grade: vi.fn().mockResolvedValue({
+        grader_type: 'deterministic', score: 1.0, weight: 1.0, details: 'ok',
+      }),
+    });
+
+    const runner = new EvalRunner(provider);
+    const report = await runner.runEval(agent, '/task', [], opts, 1);
+
+    expect(provider.runCommand).toHaveBeenCalledWith('/workspace', 'echo cleanup', undefined);
+    expect(provider.cleanup).toHaveBeenCalledWith('/workspace');
+
+    const trial = report.trials[0];
+    const cleanupLog = trial.session_log.find(l => l.type === 'trial_cleanup');
+    expect(cleanupLog).toBeTruthy();
+    expect(cleanupLog?.command).toBe('echo cleanup');
+  });
+
+  it('executes and logs trialConfig.setup', async () => {
+    const provider = makeMockProvider();
+    const agent = makeMockAgent();
+    const opts = makeEvalOpts({
+      trialConfig: {
+        setup: 'echo setup'
+      }
+    } as any);
+
+    const gradersModule = await import('../src/graders/index');
+    vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
+      grade: vi.fn().mockResolvedValue({
+        grader_type: 'deterministic', score: 1.0, weight: 1.0, details: 'ok',
+      }),
+    });
+
+    const runner = new EvalRunner(provider);
+    const report = await runner.runEval(agent, '/task', [], opts, 1);
+
+    expect(provider.runCommand).toHaveBeenCalledWith('/workspace', 'echo setup', undefined);
+
+    const trial = report.trials[0];
+    const setupLog = trial.session_log.find(l => l.type === 'trial_setup');
+    expect(setupLog).toBeTruthy();
+    expect(setupLog?.command).toBe('echo setup');
+  });
 });

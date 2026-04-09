@@ -438,7 +438,9 @@
       border-left-color: var(--purple);
     }
 
-    .log-entry.command {
+    .log-entry.command,
+    .log-entry.trial_setup,
+    .log-entry.trial_cleanup {
       border-left-color: var(--blue);
     }
 
@@ -471,7 +473,9 @@
       color: var(--purple);
     }
 
-    .command .log-label {
+    .command .log-label,
+    .trial_setup .log-label,
+    .trial_cleanup .log-label {
       background: var(--blue-bg);
       color: var(--blue);
     }
@@ -744,6 +748,8 @@
           body = '<pre class="code-block">' + esc(e.instruction || '') + '</pre>';
           break;
         case 'command':
+        case 'trial_setup':
+        case 'trial_cleanup':
           body = '<div class="cmd-line">' + esc(e.command || '') + '</div>'
             + '<pre class="code-block">' + esc(e.stdout || '')
             + (e.stderr ? '<span class="stderr-text">' + esc(e.stderr) + '</span>' : '')

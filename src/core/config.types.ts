@@ -34,6 +34,11 @@ export interface EnvironmentConfig {
     memory_mb: number;
 }
 
+export interface TrialConfig {
+    setup?: string;
+    cleanup?: string;
+}
+
 /** Single eval task */
 export interface EvalTaskConfig {
     name: string;
@@ -41,7 +46,7 @@ export interface EvalTaskConfig {
     workspace?: WorkspaceMapping[];
     graders: EvalGraderConfig[];
     solution?: string;      // path to reference solution script
-    trialSetup?: string;    // task-specific setup command (runs per trial)
+    trialConfig?: TrialConfig;
 
     // Per-task overrides
     agent?: string;
@@ -80,7 +85,7 @@ export interface ResolvedTask {
     workspace: WorkspaceMapping[];
     graders: ResolvedGrader[];
     solution?: string;      // resolved file path
-    trialSetup?: string;    // task-specific setup command (runs per trial)
+    trialConfig?: TrialConfig;
     agent: string;
     provider: string;
     trials: number;

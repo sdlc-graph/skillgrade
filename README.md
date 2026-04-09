@@ -102,6 +102,10 @@ tasks:
         dest: /usr/local/bin/superlint
         chmod: "+x"
 
+    trialConfig:                         # per-trial hooks (optional)
+      setup: "echo setup"                # inline or file path
+      cleanup: "echo cleanup"            # inline or file path
+
     graders:
       - type: deterministic
         setup: npm install typescript    # grader-specific deps (optional)
@@ -119,11 +123,14 @@ tasks:
     timeout: 600
 ```
 
-String values (`instruction`, `rubric`, `run`) support **file references** — if the value is a valid file path, its contents are read automatically:
+String values (`instruction`, `rubric`, `run`) and `trialConfig` fields (`setup`, `cleanup`) support **file references** — if the value is a valid file path, its contents are read automatically:
 
 ```yaml
 instruction: instructions/fix-linting.md
 rubric: rubrics/workflow-quality.md
+trialConfig:
+  setup: scripts/setup.sh
+  cleanup: scripts/cleanup.sh
 ```
 
 ## Graders

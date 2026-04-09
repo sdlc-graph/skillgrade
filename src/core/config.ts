@@ -116,7 +116,7 @@ function validateConfig(raw: any): EvalConfig {
             trials: t.trials,
             timeout: t.timeout,
             docker: t.docker,
-            trialSetup: t.trialSetup,
+            trialConfig: t.trialConfig,
         };
     });
 
@@ -186,7 +186,10 @@ export async function resolveTask(
         grader_model,
         docker,
         environment,
-        trialSetup: task.trialSetup,
+        trialConfig: task.trialConfig ? {
+            setup: task.trialConfig.setup ? await resolveFileOrInline(task.trialConfig.setup, baseDir) : undefined,
+            cleanup: task.trialConfig.cleanup ? await resolveFileOrInline(task.trialConfig.cleanup, baseDir) : undefined,
+        } : undefined,
     };
 }
 

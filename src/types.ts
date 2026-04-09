@@ -20,7 +20,7 @@ export interface GraderResult {
 }
 
 export interface LogEntry {
-    type: 'agent_start' | 'command' | 'agent_result' | 'grader' | 'reward';
+    type: 'agent_start' | 'command' | 'agent_result' | 'grader' | 'reward' | 'trial_setup' | 'trial_cleanup';
     timestamp: string;
     instruction?: string;
     command?: string;

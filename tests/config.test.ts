@@ -129,13 +129,15 @@ tasks:
     expect(config.tasks[0].graders[1].type).toBe('llm_rubric');
   });
 
-  it('parses trialSetup correctly', async () => {
+  it('parses trialConfig correctly', async () => {
     mockPathExists.mockResolvedValue(true as any);
     const yaml = `version: "1"
 tasks:
   - name: test-task
     instruction: "do it"
-    trialSetup: "echo setup"
+    trialConfig:
+      setup: "echo setup"
+      cleanup: "echo cleanup"
     graders:
       - type: deterministic
         run: "echo ok"
@@ -143,7 +145,8 @@ tasks:
     mockReadFile.mockResolvedValue(yaml as any);
 
     const config = await loadEvalConfig('/test');
-    expect(config.tasks[0].trialSetup).toBe('echo setup');
+    expect(config.tasks[0].trialConfig?.setup).toBe('echo setup');
+    expect(config.tasks[0].trialConfig?.cleanup).toBe('echo cleanup');
   });
 
   it('applies default values when defaults not specified', async () => {
@@ -234,6 +237,7 @@ describe('resolveTask', () => {
     timeout: 300,
     threshold: 0.8,
     docker: { base: 'node:20-slim' },
+    environment: { cpus: 1, memory_mb: 512 },
   };
 
   it('applies defaults when task has no overrides', async () => {

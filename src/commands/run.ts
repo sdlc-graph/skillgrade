@@ -121,7 +121,10 @@ export async function runEvals(dir: string, opts: RunOptions) {
             timeoutSec: resolved.timeout,
             graderModel: resolved.grader_model,
             environment: resolved.environment,
-            trialSetup: resolved.trialSetup,
+            trialConfig: {
+                setup: resolved.trialConfig?.setup ? 'bash scripts/trial_setup.sh' : undefined,
+                cleanup: resolved.trialConfig?.cleanup ? 'bash scripts/trial_cleanup.sh' : undefined,
+            },
         };
 
         // Pick agent: CLI flag > task-level override > auto-detect from API key > default
@@ -259,6 +262,29 @@ async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string, tmpDi
         if (llmGraders[i].rubric) {
             const filename = i === 0 ? 'quality.md' : `quality_${i}.md`;
             await fs.writeFile(path.join(tmpDir, 'prompts', filename), llmGraders[i].rubric!);
+        }
+    }
+
+    // Write trial setup and cleanup scripts
+    if (resolved.trialConfig) {
+        await fs.ensureDir(path.join(tmpDir, 'scripts'));
+        
+        const ensureShebang = (content: string) => {
+            if (content.startsWith('#!')) return content;
+            return `#!/bin/bash\n\n${content}`;
+        };
+
+        if (resolved.trialConfig.setup) {
+            await fs.writeFile(
+                path.join(tmpDir, 'scripts', 'trial_setup.sh'),
+                ensureShebang(resolved.trialConfig.setup.trim())
+            );
+        }
+        if (resolved.trialConfig.cleanup) {
+            await fs.writeFile(
+                path.join(tmpDir, 'scripts', 'trial_cleanup.sh'),
+                ensureShebang(resolved.trialConfig.cleanup.trim())
+            );
         }
     }
 

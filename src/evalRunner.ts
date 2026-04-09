@@ -4,7 +4,7 @@ import {
     BaseAgent, EnvironmentProvider,
     LogEntry, TrialResult, EvalReport, GraderResult
 } from './types';
-import { ResolvedGrader } from './core/config.types';
+import { ResolvedGrader, TrialConfig } from './core/config.types';
 import { getGrader } from './graders';
 import { fmt, Spinner } from './utils/cli';
 
@@ -52,7 +52,7 @@ export interface EvalRunOptions {
     instruction: string;
     graders: ResolvedGrader[];
     timeoutSec: number;
-    trialSetup?: string;
+    trialConfig?: TrialConfig;
     graderModel?: string;       // default LLM grader model
     graderTimeoutSec?: number;  // timeout per grader (default: 120s)
     environment: {
@@ -177,7 +177,10 @@ export class EvalRunner {
         let workspace: string | undefined;
 
         try {
-            workspace = await this.provider.setup(taskPath, skillsPaths, opts, env);
+            workspace = await this.provider.setup(taskPath, skillsPaths, {
+                timeoutSec: opts.timeoutSec,
+                environment: opts.environment
+            }, env);
             const instruction = opts.instruction;
 
             sessionLog.push({
@@ -185,6 +188,22 @@ export class EvalRunner {
                 timestamp: this.timestamp(),
                 instruction
             });
+
+            if (opts.trialConfig?.setup) {
+                spinner.update('running trial setup');
+                const res = await this.provider.runCommand(workspace, opts.trialConfig.setup, env);
+                sessionLog.push({
+                    type: 'trial_setup',
+                    timestamp: this.timestamp(),
+                    command: opts.trialConfig.setup,
+                    stdout: res.stdout,
+                    stderr: res.stderr,
+                    exitCode: res.exitCode
+                });
+                if (res.exitCode !== 0) {
+                    throw new Error(`Per-trial setup failed with exit code ${res.exitCode}`);
+                }
+            }
 
             spinner.update('running agent');
             const loggedRunCommand = async (cmd: string) => {
@@ -321,6 +340,24 @@ export class EvalRunner {
             };
         } finally {
             if (workspace) {
+                if (opts.trialConfig?.cleanup) {
+                    try {
+                        const result = await this.provider.runCommand(workspace, opts.trialConfig.cleanup, env);
+                        sessionLog.push({
+                            type: 'trial_cleanup',
+                            timestamp: this.timestamp(),
+                            command: opts.trialConfig.cleanup,
+                            stdout: result.stdout,
+                            stderr: result.stderr,
+                            exitCode: result.exitCode
+                        });
+                        if (result.exitCode !== 0) {
+                            console.error(`Per-trial cleanup failed with exit code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+                        }
+                    } catch (e) {
+                        console.error(`Error running per-trial cleanup: ${e}`);
+                    }
+                }
                 await this.provider.cleanup(workspace);
             }
         }
