@@ -29,6 +29,7 @@ interface RunOptions {
     provider?: string;   // override provider (docker|local)
     output?: string;     // output directory for reports and temp files
     grader?: string;     // filter graders by type (deterministic|llm_rubric)
+    noRedact?: boolean;
 }
 
 async function loadEnvFile(filePath: string): Promise<Record<string, string>> {
@@ -143,7 +144,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
             ? new DockerProvider()
             : new LocalProvider();
 
-        const runner = new EvalRunner(provider, resultsDir);
+        const runner = new EvalRunner(provider, resultsDir, opts.noRedact);
 
         if (opts.validate) {
             // Validation mode

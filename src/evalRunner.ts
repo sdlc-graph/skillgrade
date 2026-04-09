@@ -63,10 +63,12 @@ export interface EvalRunOptions {
 export class EvalRunner {
     private provider: EnvironmentProvider;
     private logDir?: string;
+    private noRedact: boolean;
 
-    constructor(provider: EnvironmentProvider, logDir?: string) {
+    constructor(provider: EnvironmentProvider, logDir?: string, noRedact: boolean = false) {
         this.provider = provider;
         this.logDir = logDir;
+        this.noRedact = noRedact;
     }
 
     private timestamp(): string {
@@ -127,7 +129,7 @@ export class EvalRunner {
         };
 
         if (this.logDir) {
-            const sanitized = this.sanitize(report, env);
+            const sanitized = this.noRedact ? report : this.sanitize(report, env);
             await this.saveReport(sanitized);
         }
 

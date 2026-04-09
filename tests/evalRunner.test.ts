@@ -149,6 +149,36 @@ describe('EvalRunner', () => {
     expect(reportStr).toContain('[REDACTED]');
   });
 
+  it('does not sanitize secrets from report when noRedact is true', async () => {
+    const provider = makeMockProvider();
+    (provider.runCommand as any).mockResolvedValue({
+      stdout: 'The key is MY_SECRET_VALUE_123',
+      stderr: '',
+      exitCode: 0,
+    });
+    const agent = {
+      run: vi.fn().mockImplementation(async (instruction: string, workspace: string, runCommand: any) => {
+        const res = await runCommand('echo test');
+        return `Output: ${res.stdout}`;
+      }),
+    } as any as BaseAgent;
+
+    const gradersModule = await import('../src/graders/index');
+    vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
+      grade: vi.fn().mockResolvedValue({
+        grader_type: 'deterministic', score: 1.0, weight: 1.0, details: 'ok',
+      }),
+    });
+
+    const runner = new EvalRunner(provider, '/logs', true);
+    await runner.runEval(agent, '/task', [], makeEvalOpts(), 1, { SECRET: 'MY_SECRET_VALUE_123' });
+
+    const writtenReport = (mockWriteJSON.mock.calls[0] as any[])[1];
+    const reportStr = JSON.stringify(writtenReport);
+    expect(reportStr).toContain('MY_SECRET_VALUE_123');
+    expect(reportStr).not.toContain('[REDACTED]');
+  });
+
   it('calculates correct pass_rate and pass_at_k', async () => {
     const provider = makeMockProvider();
     const agent = makeMockAgent();

@@ -102,6 +102,7 @@ async function main() {
         provider: getFlag('provider'),
         grader: getFlag('grader'),
         output: outputDir,
+        noRedact: hasFlag('no-redact'),
     });
 
     if (openPreview) {
@@ -137,6 +138,7 @@ function printHelp() {
     --ci               CI mode: exit non-zero if below threshold
     --threshold=0.8    Pass rate threshold for CI mode
     --preview          Open CLI results after running
+    --no-redact        Disable redaction of environment variables in reports
 
   Examples:
     skillgrade init                # scaffold eval.yaml
