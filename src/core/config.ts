@@ -135,10 +135,16 @@ function validateConfig(raw: any): EvalConfig {
                 // Support shorthand: "fixtures/app.js" → same filename in workspace
                 return { src: w, dest: path.basename(w) };
             }
-            if (!w.src || !w.dest) {
-                throw new Error(`Task "${t.name}" has a workspace mapping without src/dest`);
+            if (!w.dest) {
+                throw new Error(`Task "${t.name}" has a workspace mapping without dest`);
             }
-            return { src: w.src, dest: w.dest, chmod: w.chmod };
+            if (!w.src && w.content === undefined) {
+                throw new Error(`Task "${t.name}" has a workspace mapping without src or content`);
+            }
+            if (w.src && w.content !== undefined) {
+                throw new Error(`Task "${t.name}" has a workspace mapping with both src and content`);
+            }
+            return { src: w.src, content: w.content, dest: w.dest, chmod: w.chmod };
         });
 
         return {

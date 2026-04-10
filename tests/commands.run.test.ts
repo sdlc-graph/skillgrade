@@ -15,6 +15,7 @@ vi.mock('fs-extra', () => ({
 import * as fs from 'fs-extra';
 import { ResolvedTask } from '../src/core/config.types';
 import { TaskConfig } from '../src/types';
+import { prepareTempTaskDir } from '../src/commands/run';
 
 const mockPathExists = vi.mocked(fs.pathExists);
 const mockEnsureDir = vi.mocked(fs.ensureDir);
@@ -203,5 +204,78 @@ SINGLE='quoted'
       PLAIN: 'text',
       SINGLE: 'quoted',
     });
+  });
+});
+
+describe('prepareTempTaskDir', () => {
+  it('uses temp file for inline workspace content', async () => {
+    const resolved: ResolvedTask = {
+      name: 'test-task',
+      instruction: 'do it',
+      workspace: [
+        {
+          content: '{\n  "mcpServers": {}\n}',
+          dest: '/root/.gemini/settings.json',
+        },
+      ],
+      graders: [],
+      agent: 'gemini',
+      provider: 'docker',
+      trials: 5,
+      timeout: 300,
+      docker: { base: 'node:20-slim' },
+      environment: { cpus: 2, memory_mb: 2048 },
+    };
+
+    mockPathExists.mockResolvedValue(false as any);
+
+    await prepareTempTaskDir(resolved, '/base', '/tmp');
+
+    expect(mockWriteFile).toHaveBeenCalled();
+    const dockerfileCall = mockWriteFile.mock.calls.find(call => 
+      (call[0] as string).endsWith('Dockerfile')
+    );
+    expect(dockerfileCall).toBeTruthy();
+    const content = dockerfileCall![1] as string;
+    expect(content).toContain("COPY workspace_files/inline_file_1.tmp /root/.gemini/settings.json");
+
+    const inlineFileCall = mockWriteFile.mock.calls.find(call => 
+      (call[0] as string).endsWith(path.join('workspace_files', 'inline_file_1.tmp'))
+    );
+    expect(inlineFileCall).toBeTruthy();
+    expect(inlineFileCall![1]).toBe('{\n  "mcpServers": {}\n}');
+  });
+
+  it('uses regular COPY for file paths', async () => {
+    const resolved: ResolvedTask = {
+      name: 'test-task',
+      instruction: 'do it',
+      workspace: [
+        {
+          src: 'fixtures/app.js',
+          dest: 'app.js',
+        },
+      ],
+      graders: [],
+      agent: 'gemini',
+      provider: 'docker',
+      trials: 5,
+      timeout: 300,
+      docker: { base: 'node:20-slim' },
+      environment: { cpus: 2, memory_mb: 2048 },
+    };
+
+    mockPathExists.mockResolvedValue(true as any);
+
+    await prepareTempTaskDir(resolved, '/base', '/tmp');
+
+    expect(mockWriteFile).toHaveBeenCalled();
+    const dockerfileCall = mockWriteFile.mock.calls.find(call => 
+      (call[0] as string).endsWith('Dockerfile')
+    );
+    expect(dockerfileCall).toBeTruthy();
+    const content = dockerfileCall![1] as string;
+    expect(content).toContain('COPY app.js app.js');
+    expect(content).not.toContain("COPY <<'EOF'");
   });
 });

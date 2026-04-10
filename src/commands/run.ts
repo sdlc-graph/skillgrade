@@ -231,7 +231,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
  * Contains: Dockerfile, workspace files, grader scripts.
  * No longer writes task.toml or instruction.md — those are passed directly.
  */
-async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string, tmpDir: string) {
+export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string, tmpDir: string) {
     await fs.ensureDir(tmpDir);
 
     // Write each deterministic grader script
@@ -273,7 +273,7 @@ async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string, tmpDi
     // Write trial setup and cleanup scripts
     if (resolved.trialConfig) {
         await fs.ensureDir(path.join(tmpDir, 'scripts'));
-        
+
         const ensureShebang = (content: string) => {
             if (content.startsWith('#!')) return content;
             return `#!/bin/bash\n\n${content}`;
@@ -318,15 +318,31 @@ async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string, tmpDi
         }
     }
 
+    let inlineFileCount = 0;
+    const workspaceFilesDir = path.join(tmpDir, 'workspace_files');
     // Copy workspace files
     for (const w of resolved.workspace) {
-        const srcPath = path.resolve(baseDir, w.src);
-        const destInTmp = path.join(tmpDir, path.basename(w.src));
-        if (await fs.pathExists(srcPath)) {
-            await fs.copy(srcPath, destInTmp);
-            dockerfileContent += `COPY ${path.basename(w.src)} ${w.dest}\n`;
+        if (w.content !== undefined) {
+            inlineFileCount++;
+            await fs.ensureDir(workspaceFilesDir);
+            const tmpFileName = `inline_file_${inlineFileCount}.tmp`;
+            await fs.writeFile(path.join(workspaceFilesDir, tmpFileName), w.content);
+
+            dockerfileContent += `COPY workspace_files/${tmpFileName} ${w.dest}\n`;
             if (w.chmod) {
                 dockerfileContent += `RUN chmod ${w.chmod} ${w.dest}\n`;
+            }
+        } else if (w.src) {
+            const srcPath = path.resolve(baseDir, w.src);
+            const destInTmp = path.join(tmpDir, path.basename(w.src));
+            if (await fs.pathExists(srcPath)) {
+                await fs.copy(srcPath, destInTmp);
+                dockerfileContent += `COPY ${path.basename(w.src)} ${w.dest}\n`;
+                if (w.chmod) {
+                    dockerfileContent += `RUN chmod ${w.chmod} ${w.dest}\n`;
+                }
+            } else {
+                throw new Error(`Workspace file not found: ${srcPath}`);
             }
         }
     }

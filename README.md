@@ -103,6 +103,10 @@ tasks:
       - src: bin/superlint
         dest: /usr/local/bin/superlint
         chmod: "+x"
+      - content: |                       # inline file content
+          # Gemini Custom Instructions
+          Always use TypeScript for new files.
+        dest: /root/.gemini/GEMINI.md
 
     trialConfig:                         # per-trial hooks (optional)
       setup: "echo setup"                # inline or file path
@@ -133,6 +137,20 @@ rubric: rubrics/workflow-quality.md
 trialConfig:
   setup: scripts/setup.sh
   cleanup: scripts/cleanup.sh
+```
+
+### Workspace Inline Content
+
+For `workspace` mappings, you can use the `content` field instead of `src` to provide the file content directly in `eval.yaml`. This is useful for small configuration files or scripts. It writes the content to a file in a `workspace_files/` subdirectory within the build context and uses standard `COPY` under the hood.
+
+```yaml
+workspace:
+  - content: |
+      # Custom Instructions for Gemini
+      
+      - Use standard style.
+      - Write tests for all new features.
+    dest: /root/.gemini/GEMINI.md
 ```
 
 ### Docker Bind Mounts

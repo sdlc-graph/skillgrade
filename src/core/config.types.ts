@@ -9,7 +9,8 @@ import { ExpectedTool } from '../types';
 
 /** Workspace file mapping: copy a local file into the container */
 export interface WorkspaceMapping {
-    src: string;        // relative to eval.yaml
+    src?: string;       // relative to eval.yaml
+    content?: string;   // inline content
     dest: string;       // path in container (relative = in /workspace, absolute = absolute)
     chmod?: string;     // e.g. "+x"
 }
