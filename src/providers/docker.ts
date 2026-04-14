@@ -208,7 +208,7 @@ export class DockerProvider implements EnvironmentProvider {
         return files;
     }
 
-    async runCommand(containerId: string, command: string, env?: Record<string, string>): Promise<CommandResult> {
+    async runCommand(containerId: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
         const container = this.docker.getContainer(containerId);
         const envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
@@ -239,6 +239,18 @@ export class DockerProvider implements EnvironmentProvider {
             stdoutStream.on('data', (chunk: Buffer) => { stdoutData += chunk.toString(); });
             stderrStream.on('data', (chunk: Buffer) => { stderrData += chunk.toString(); });
 
+            if (opts?.signal) {
+                const onAbort = () => {
+                    stream.destroy();
+                    resolve({ stdout: stdoutData, stderr: stderrData });
+                };
+                if (opts.signal.aborted) {
+                    onAbort();
+                } else {
+                    opts.signal.addEventListener('abort', onAbort);
+                }
+            }
+
             this.docker.modem.demuxStream(stream, stdoutStream, stderrStream);
 
             stream.on('end', () => resolve({ stdout: stdoutData, stderr: stderrData }));
@@ -250,7 +262,7 @@ export class DockerProvider implements EnvironmentProvider {
         return {
             stdout,
             stderr,
-            exitCode: result.ExitCode ?? 0
+            exitCode: opts?.signal?.aborted ? 124 : (result.ExitCode ?? 0)
         };
     }
 

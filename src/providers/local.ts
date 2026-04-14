@@ -50,7 +50,7 @@ export class LocalProvider implements EnvironmentProvider {
         }
     }
 
-    async runCommand(workspacePath: string, command: string, env?: Record<string, string>): Promise<CommandResult> {
+    async runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
         return new Promise((resolve) => {
             const child = spawn(command, {
                 shell: true,
@@ -64,12 +64,28 @@ export class LocalProvider implements EnvironmentProvider {
             child.stdout.on('data', (data) => { stdout += data.toString(); });
             child.stderr.on('data', (data) => { stderr += data.toString(); });
 
+            if (opts?.signal) {
+                const onAbort = () => {
+                    try {
+                        child.kill('SIGTERM');
+                        setTimeout(() => {
+                            try { child.kill('SIGKILL'); } catch (e) {}
+                        }, 1000);
+                    } catch (e) {}
+                };
+                if (opts.signal.aborted) {
+                    onAbort();
+                } else {
+                    opts.signal.addEventListener('abort', onAbort);
+                }
+            }
+
             child.on('close', (code) => {
-                resolve({ stdout, stderr, exitCode: code ?? 1 });
+                resolve({ stdout, stderr, exitCode: opts?.signal?.aborted ? 124 : (code ?? 1) });
             });
 
             child.on('error', () => {
-                resolve({ stdout, stderr, exitCode: 1 });
+                resolve({ stdout, stderr, exitCode: opts?.signal?.aborted ? 124 : 1 });
             });
         });
     }

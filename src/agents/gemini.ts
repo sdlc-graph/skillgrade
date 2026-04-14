@@ -4,8 +4,8 @@ export class GeminiAgent extends BaseAgent {
     async run(
         instruction: string,
         _workspacePath: string,
-        runCommand: (cmd: string) => Promise<CommandResult>,
-        options?: { agentWorkingDir?: string }
+        runCommand: (cmd: string, opts?: { signal?: AbortSignal }) => Promise<CommandResult>,
+        options?: { agentWorkingDir?: string; signal?: AbortSignal }
     ): Promise<string> {
         // Write instruction to a temp file to avoid shell escaping issues with long prompts
         const b64 = Buffer.from(instruction).toString('base64');
@@ -13,7 +13,7 @@ export class GeminiAgent extends BaseAgent {
 
         const command = `gemini -y --sandbox=none --output-format stream-json -p "$(cat /tmp/.prompt.md)"`;
         const fullCommand = options?.agentWorkingDir ? `cd ${options.agentWorkingDir} && ${command}` : command;
-        const result = await runCommand(fullCommand);
+        const result = await runCommand(fullCommand, { signal: options?.signal });
 
         const lines = result.stdout.split('\n');
         const toolCalls: string[] = [];
