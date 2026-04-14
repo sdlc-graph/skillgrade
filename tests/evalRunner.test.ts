@@ -338,7 +338,10 @@ describe('EvalRunner', () => {
     const runner = new EvalRunner(provider);
     const report = await runner.runEval(agent, '/task', [], opts, 1);
 
-    expect(provider.runCommand).toHaveBeenCalledWith('/workspace', 'echo cleanup', {});
+    expect(provider.runCommand).toHaveBeenCalledWith('/workspace', 'echo cleanup', expect.objectContaining({
+      _EVAL_TRIAL: '1',
+      _EVAL_UUID: expect.any(String)
+    }));
     expect(provider.cleanup).toHaveBeenCalledWith('/workspace');
 
     const trial = report.trials[0];
@@ -366,7 +369,10 @@ describe('EvalRunner', () => {
     const runner = new EvalRunner(provider);
     const report = await runner.runEval(agent, '/task', [], opts, 1);
 
-    expect(provider.runCommand).toHaveBeenCalledWith('/workspace', 'echo setup', {});
+    expect(provider.runCommand).toHaveBeenCalledWith('/workspace', 'echo setup', expect.objectContaining({
+      _EVAL_TRIAL: '1',
+      _EVAL_UUID: expect.any(String)
+    }));
 
     const trial = report.trials[0];
     const setupLog = trial.session_log.find(l => l.type === 'trial_setup');
