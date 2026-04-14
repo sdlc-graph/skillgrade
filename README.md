@@ -375,7 +375,6 @@ These are useful for tracking or naming resources without explicit configuration
 defaults:
   env:
     GLOBAL_VAR: "global_value"
-```
 tasks:
   - name: test-task
     env:
