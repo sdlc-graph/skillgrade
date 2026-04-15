@@ -184,6 +184,7 @@ describe('LLMGrader', () => {
 
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
         json: () => Promise.resolve({
           candidates: [{
             content: {
@@ -209,6 +210,7 @@ describe('LLMGrader', () => {
 
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
         json: () => Promise.resolve({
           candidates: [{
             content: {
@@ -233,6 +235,7 @@ describe('LLMGrader', () => {
 
       const originalFetch = globalThis.fetch;
       globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
         json: () => Promise.resolve({
           candidates: [{ content: { parts: [{ text: '' }] } }],
         }),
@@ -315,7 +318,7 @@ describe('LLMGrader', () => {
     });
   });
 
-  it('builds transcript with instruction, commands, agent output, and prior graders', async () => {
+  it('builds transcript with instruction, agent output, and prior graders', async () => {
     mockPathExists.mockResolvedValue(true as any);
     mockReadFile.mockResolvedValue('rubric' as any);
 
@@ -324,6 +327,7 @@ describe('LLMGrader', () => {
     globalThis.fetch = vi.fn().mockImplementation(async (_url: string, opts: any) => {
       capturedBody = JSON.parse(opts.body);
       return {
+        ok: true,
         json: () => Promise.resolve({
           candidates: [{ content: { parts: [{ text: '{"score": 1.0, "reasoning": "ok"}' }] } }],
         }),
@@ -343,7 +347,7 @@ describe('LLMGrader', () => {
 
     const prompt = capturedBody.contents[0].parts[0].text;
     expect(prompt).toContain('Do something');
-    expect(prompt).toContain('$ ls');
+    expect(prompt).not.toContain('$ ls');
     expect(prompt).toContain('Done!');
     expect(prompt).toContain('deterministic');
 
