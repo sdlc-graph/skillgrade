@@ -42,11 +42,12 @@ The agent is auto-detected from your API key: `GEMINI_API_KEY` → Gemini, `ANTH
 ```bash
 skillgrade preview          # CLI report
 skillgrade preview browser  # web UI → http://localhost:3847
-# Or with a custom output directory:
+# Or with a custom local or GCS output directory:
 skillgrade preview --output=reports
+skillgrade preview --output=gs://my-bucket/prefix
 ```
 
-Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `--output=DIR`.
+Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `--output=DIR`. The `--output` flag also supports Google Cloud Storage URIs (e.g., `gs://my-bucket/prefix`) to store results directly in the cloud.
 
 ## Presets
 

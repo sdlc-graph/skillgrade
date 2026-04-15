@@ -64,6 +64,7 @@
     "vitest": "^4.1.0"
   },
   "dependencies": {
+    "@google-cloud/storage": "^7.19.0",
     "@google/generative-ai": "^0.24.1",
     "dockerode": "^4.0.9",
     "fs-extra": "^11.3.3",

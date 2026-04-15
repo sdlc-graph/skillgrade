@@ -97,9 +97,17 @@ export async function runEvals(dir: string, opts: RunOptions) {
     // Output directory
     const outputBase = opts.output || path.join(os.tmpdir(), 'skillgrade');
     const skillName = path.basename(dir);
-    const outputDir = path.join(outputBase, skillName);
-    const resultsDir = path.join(outputDir, 'results');
-    await fs.ensureDir(resultsDir);
+    let outputDir: string;
+    let resultsDir: string;
+
+    if (outputBase.startsWith('gs://')) {
+        outputDir = outputBase.endsWith('/') ? `${outputBase}${skillName}` : `${outputBase}/${skillName}`;
+        resultsDir = `${outputDir}/results`;
+    } else {
+        outputDir = path.join(outputBase, skillName);
+        resultsDir = path.join(outputDir, 'results');
+        await fs.ensureDir(resultsDir);
+    }
     kv('output', outputDir);
 
     // Track CI results
@@ -117,7 +125,10 @@ export async function runEvals(dir: string, opts: RunOptions) {
         const parallel = opts.parallel ?? 1;
 
         // Create a temp task directory for Docker builds
-        const tmpTaskDir = path.join(outputDir, 'tmp', resolved.name);
+        const localTmpBase = outputBase.startsWith('gs://')
+            ? path.join(os.tmpdir(), 'skillgrade', skillName)
+            : outputDir;
+        const tmpTaskDir = path.join(localTmpBase, 'tmp', resolved.name);
         await prepareTempTaskDir(resolved, dir, tmpTaskDir);
 
         // Build eval options — pass resolved content directly
