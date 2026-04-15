@@ -208,14 +208,15 @@ export class DockerProvider implements EnvironmentProvider {
         return files;
     }
 
-    async runCommand(containerId: string, command: string, env?: Record<string, string>): Promise<CommandResult> {
+    async runCommand(containerId: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
         const container = this.docker.getContainer(containerId);
         const envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
+        const cmdId = Math.random().toString(36).substring(7);
         let exec;
         try {
             exec = await container.exec({
-                Cmd: ['/bin/bash', '-c', command],
+                Cmd: ['/bin/bash', '-c', `echo $$ > /tmp/cmd_${cmdId}.pid; exec /bin/bash -c ${JSON.stringify(command)}`],
                 AttachStdout: true,
                 AttachStderr: true,
                 Tty: false,
@@ -239,18 +240,53 @@ export class DockerProvider implements EnvironmentProvider {
             stdoutStream.on('data', (chunk: Buffer) => { stdoutData += chunk.toString(); });
             stderrStream.on('data', (chunk: Buffer) => { stderrData += chunk.toString(); });
 
+            if (opts?.signal) {
+                const onAbort = async () => {
+                    stream.destroy();
+                    
+                    try {
+                        const killExec = await container.exec({
+                            Cmd: ['/bin/bash', '-c', `
+                                pid=$(cat /tmp/cmd_${cmdId}.pid 2>/dev/null)
+                                if [ -n "$pid" ]; then
+                                    kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null
+                                    pkill -9 -P $pid 2>/dev/null || true
+                                fi
+                                pkill -9 -f "gemini" 2>/dev/null || true
+                                pkill -9 -f "node" 2>/dev/null || true
+                            `]
+                        });
+                        const killStream = await killExec.start({});
+                        await new Promise<void>(r => {
+                            killStream.on('end', r);
+                            killStream.on('error', r);
+                            setTimeout(r, 1000); 
+                        });
+                    } catch (e) {
+                        console.error(`[Failed to abort/kill Gemini CLI processes: ${e}]`);
+                    }
+                    
+                    resolve({ stdout: stdoutData, stderr: stderrData });
+                };
+                if (opts.signal.aborted) {
+                    onAbort();
+                } else {
+                    opts.signal.addEventListener('abort', onAbort);
+                }
+            }
+
             this.docker.modem.demuxStream(stream, stdoutStream, stderrStream);
 
             stream.on('end', () => resolve({ stdout: stdoutData, stderr: stderrData }));
             stream.on('error', (err: Error) => reject(err));
         });
 
-        const result = await exec.inspect();
+        const result = opts?.signal?.aborted ? { ExitCode: 124 } : await exec.inspect();
 
         return {
             stdout,
             stderr,
-            exitCode: result.ExitCode ?? 0
+            exitCode: opts?.signal?.aborted ? 124 : (result.ExitCode ?? 0)
         };
     }
 

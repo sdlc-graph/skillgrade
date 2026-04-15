@@ -66,8 +66,8 @@ export abstract class BaseAgent {
     abstract run(
         instruction: string,
         workspacePath: string,
-        runCommand: (cmd: string) => Promise<CommandResult>,
-        options?: { agentWorkingDir?: string }
+        runCommand: (cmd: string, opts?: { signal?: AbortSignal }) => Promise<CommandResult>,
+        options?: { agentWorkingDir?: string; signal?: AbortSignal }
     ): Promise<string>;
 }
 
@@ -91,6 +91,6 @@ export interface EnvironmentProvider {
     cleanup(workspacePath: string): Promise<void>;
     /** One-time teardown. */
     teardown?(): Promise<void>;
-    runCommand(workspacePath: string, command: string, env?: Record<string, string>): Promise<CommandResult>;
+    runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult>;
     diagnose?(workspacePath: string): Promise<string>;
 }

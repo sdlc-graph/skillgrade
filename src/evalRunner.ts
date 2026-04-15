@@ -269,8 +269,9 @@ export class EvalRunner {
             }
 
             spinner.update('running agent');
-            const loggedRunCommand = async (cmd: string) => {
-                const result = await this.provider.runCommand(workspace!, cmd, trialEnv);
+            const abortController = new AbortController();
+            const loggedRunCommand = async (cmd: string, cmdOpts?: { signal?: AbortSignal }) => {
+                const result = await this.provider.runCommand(workspace!, cmd, trialEnv, { signal: cmdOpts?.signal });
                 commandCount++;
                 sessionLog.push({
                     type: 'command',
@@ -284,11 +285,28 @@ export class EvalRunner {
             };
 
             const agentTimeoutMs = opts.timeoutSec * 1000;
-            const agentLogs = await withTimeout(
-                agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir: opts.agentWorkingDir }),
-                agentTimeoutMs,
-                `Agent (limit: ${opts.timeoutSec}s)`
-            );
+            let agentLogs: string;
+            
+            const abortTimer = setTimeout(() => {
+                abortController.abort();
+            }, agentTimeoutMs);
+
+            try {
+                agentLogs = await withTimeout(
+                    agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir: opts.agentWorkingDir, signal: abortController.signal }),
+                    agentTimeoutMs + 5000, // Grace period to allow agent.run to resolve with partial logs
+                    `Agent (limit: ${opts.timeoutSec}s)`
+                );
+            } catch (err: any) {
+                if (err.message && err.message.includes('timed out')) {
+                    console.error(`[Failed to abort after timeout: ${err.message}]`);
+                    throw err;
+                } else {
+                    throw err;
+                }
+            } finally {
+                clearTimeout(abortTimer);
+            }
 
             sessionLog.push({
                 type: 'agent_result',
