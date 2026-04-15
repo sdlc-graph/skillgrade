@@ -263,7 +263,7 @@ export class DockerProvider implements EnvironmentProvider {
                             setTimeout(r, 1000); 
                         });
                     } catch (e) {
-                        // Ignore cleanup errors
+                        console.error(`[Failed to abort/kill Gemini CLI processes: ${e}]`);
                     }
                     
                     resolve({ stdout: stdoutData, stderr: stderrData });
