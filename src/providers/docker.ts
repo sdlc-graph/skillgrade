@@ -212,10 +212,11 @@ export class DockerProvider implements EnvironmentProvider {
         const container = this.docker.getContainer(containerId);
         const envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
+        const cmdId = Math.random().toString(36).substring(7);
         let exec;
         try {
             exec = await container.exec({
-                Cmd: ['/bin/bash', '-c', command],
+                Cmd: ['/bin/bash', '-c', `echo $$ > /tmp/cmd_${cmdId}.pid; exec /bin/bash -c ${JSON.stringify(command)}`],
                 AttachStdout: true,
                 AttachStderr: true,
                 Tty: false,
@@ -240,8 +241,31 @@ export class DockerProvider implements EnvironmentProvider {
             stderrStream.on('data', (chunk: Buffer) => { stderrData += chunk.toString(); });
 
             if (opts?.signal) {
-                const onAbort = () => {
+                const onAbort = async () => {
                     stream.destroy();
+                    
+                    try {
+                        const killExec = await container.exec({
+                            Cmd: ['/bin/bash', '-c', `
+                                pid=$(cat /tmp/cmd_${cmdId}.pid 2>/dev/null)
+                                if [ -n "$pid" ]; then
+                                    kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null
+                                    pkill -9 -P $pid 2>/dev/null || true
+                                fi
+                                pkill -9 -f "gemini" 2>/dev/null || true
+                                pkill -9 -f "node" 2>/dev/null || true
+                            `]
+                        });
+                        const killStream = await killExec.start({});
+                        await new Promise<void>(r => {
+                            killStream.on('end', r);
+                            killStream.on('error', r);
+                            setTimeout(r, 1000); 
+                        });
+                    } catch (e) {
+                        // Ignore cleanup errors
+                    }
+                    
                     resolve({ stdout: stdoutData, stderr: stderrData });
                 };
                 if (opts.signal.aborted) {
@@ -257,7 +281,7 @@ export class DockerProvider implements EnvironmentProvider {
             stream.on('error', (err: Error) => reject(err));
         });
 
-        const result = await exec.inspect();
+        const result = opts?.signal?.aborted ? { ExitCode: 124 } : await exec.inspect();
 
         return {
             stdout,
