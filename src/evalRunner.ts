@@ -299,7 +299,7 @@ export class EvalRunner {
                 );
             } catch (err: any) {
                 if (err.message && err.message.includes('timed out')) {
-                    agentLogs = `[Agent run terminated: ${err.message}]`;
+                    agentLogs = `[Failed to abort after timeout: ${err.message}]`;
                 } else {
                     throw err;
                 }
