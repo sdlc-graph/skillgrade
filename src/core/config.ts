@@ -173,6 +173,15 @@ function validateConfig(raw: any): EvalConfig {
             throw new Error(`Task "${t.name}" agentWorkingDir must be a string`);
         }
 
+        if (t.early_stop) {
+            if (typeof t.early_stop !== 'object') {
+                throw new Error(`Task "${t.name}" early_stop must be an object`);
+            }
+            if (typeof t.early_stop.pattern !== 'string') {
+                throw new Error(`Task "${t.name}" early_stop.pattern must be a string`);
+            }
+        }
+
         const workspace = validateWorkspaceMappings(t.workspace, `Task "${t.name}"`);
         return {
             name: t.name,
@@ -211,6 +220,7 @@ function validateConfig(raw: any): EvalConfig {
             env: t.env,
             environment: t.environment,
             agentWorkingDir: t.agentWorkingDir,
+            early_stop: t.early_stop,
         };
     });
 
@@ -330,6 +340,7 @@ export async function resolveTask(
         env,
         trialConfig,
         agentWorkingDir: task.agentWorkingDir,
+        early_stop: task.early_stop,
     };
 }
 
