@@ -2,7 +2,7 @@ import Docker from 'dockerode';
 import * as fs from 'fs-extra';
 import * as path from 'path';
 import * as tar from 'tar-stream';
-import { EnvironmentProvider, EnvironmentSetupOpts, CommandResult } from '../types';
+import { EnvironmentProvider, EnvironmentSetupOpts, CommandResult, EarlyStopConfig } from '../types';
 
 export class DockerProvider implements EnvironmentProvider {
     private docker: Docker;
@@ -208,7 +208,7 @@ export class DockerProvider implements EnvironmentProvider {
         return files;
     }
 
-    async runCommand(containerId: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
+    async runCommand(containerId: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal; earlyStop?: EarlyStopConfig }): Promise<CommandResult> {
         const container = this.docker.getContainer(containerId);
         const envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
@@ -237,37 +237,43 @@ export class DockerProvider implements EnvironmentProvider {
             const stdoutStream = new (require('stream').PassThrough)();
             const stderrStream = new (require('stream').PassThrough)();
 
-            stdoutStream.on('data', (chunk: Buffer) => { stdoutData += chunk.toString(); });
-            stderrStream.on('data', (chunk: Buffer) => { stderrData += chunk.toString(); });
+            let resolved = false;
+            const earlyResolve = (data: { stdout: string; stderr: string }) => {
+                if (!resolved) {
+                    resolved = true;
+                    resolve(data);
+                }
+            };
+
+            const onAbort = async () => {
+                stream.destroy();
+
+                try {
+                    const killExec = await container.exec({
+                        Cmd: ['/bin/bash', '-c', `
+                            pid=$(cat /tmp/cmd_${cmdId}.pid 2>/dev/null)
+                            if [ -n "$pid" ]; then
+                                kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null
+                                pkill -9 -P $pid 2>/dev/null || true
+                            fi
+                            pkill -9 -f "gemini" 2>/dev/null || true
+                            pkill -9 -f "node" 2>/dev/null || true
+                        `]
+                    });
+                    const killStream = await killExec.start({});
+                    await new Promise<void>(r => {
+                        killStream.on('end', r);
+                        killStream.on('error', r);
+                        setTimeout(r, 1000);
+                    });
+                } catch (e) {
+                    console.error(`[Failed to abort/kill Gemini CLI processes: ${e}]`);
+                }
+
+                earlyResolve({ stdout: stdoutData, stderr: stderrData });
+            };
 
             if (opts?.signal) {
-                const onAbort = async () => {
-                    stream.destroy();
-                    
-                    try {
-                        const killExec = await container.exec({
-                            Cmd: ['/bin/bash', '-c', `
-                                pid=$(cat /tmp/cmd_${cmdId}.pid 2>/dev/null)
-                                if [ -n "$pid" ]; then
-                                    kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null
-                                    pkill -9 -P $pid 2>/dev/null || true
-                                fi
-                                pkill -9 -f "gemini" 2>/dev/null || true
-                                pkill -9 -f "node" 2>/dev/null || true
-                            `]
-                        });
-                        const killStream = await killExec.start({});
-                        await new Promise<void>(r => {
-                            killStream.on('end', r);
-                            killStream.on('error', r);
-                            setTimeout(r, 1000); 
-                        });
-                    } catch (e) {
-                        console.error(`[Failed to abort/kill Gemini CLI processes: ${e}]`);
-                    }
-                    
-                    resolve({ stdout: stdoutData, stderr: stderrData });
-                };
                 if (opts.signal.aborted) {
                     onAbort();
                 } else {
@@ -275,10 +281,24 @@ export class DockerProvider implements EnvironmentProvider {
                 }
             }
 
+            stdoutStream.on('data', (chunk: Buffer) => {
+                const str = chunk.toString();
+                stdoutData += str;
+
+                if (command.includes('gemini') && command.includes('--output-format stream-json')) {
+                    if (opts?.earlyStop?.pattern && stdoutData.includes(opts.earlyStop.pattern)) {
+                        onAbort();
+                    }
+                }
+            });
+            stderrStream.on('data', (chunk: Buffer) => { stderrData += chunk.toString(); });
+
             this.docker.modem.demuxStream(stream, stdoutStream, stderrStream);
 
-            stream.on('end', () => resolve({ stdout: stdoutData, stderr: stderrData }));
-            stream.on('error', (err: Error) => reject(err));
+            stream.on('end', () => earlyResolve({ stdout: stdoutData, stderr: stderrData }));
+            stream.on('error', (err: Error) => {
+                if (!resolved) reject(err);
+            });
         });
 
         const result = opts?.signal?.aborted ? { ExitCode: 124 } : await exec.inspect();

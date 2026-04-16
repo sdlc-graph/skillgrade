@@ -9,6 +9,10 @@ export interface ExpectedTool {
     args?: Record<string, any>;
 }
 
+export interface EarlyStopConfig {
+    pattern: string;
+}
+
 export interface GraderConfig {
     type: 'deterministic' | 'llm_rubric' | 'tool_usage';
     command?: string;         // for deterministic: shell command to execute (e.g. 'bash tests/test.sh')
@@ -66,8 +70,8 @@ export abstract class BaseAgent {
     abstract run(
         instruction: string,
         workspacePath: string,
-        runCommand: (cmd: string, opts?: { signal?: AbortSignal }) => Promise<CommandResult>,
-        options?: { agentWorkingDir?: string; signal?: AbortSignal }
+        runCommand: (cmd: string, opts?: { signal?: AbortSignal; earlyStop?: EarlyStopConfig }) => Promise<CommandResult>,
+        options?: { agentWorkingDir?: string; signal?: AbortSignal; earlyStop?: EarlyStopConfig }
     ): Promise<string>;
 }
 
@@ -101,7 +105,7 @@ export interface EnvironmentProvider {
     cleanup(workspacePath: string): Promise<void>;
     /** One-time teardown. */
     teardown?(): Promise<void>;
-    runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult>;
+    runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal; earlyStop?: EarlyStopConfig }): Promise<CommandResult>;
     diagnose?(workspacePath: string): Promise<string>;
     resolveWorkspacePath?(filePath: string, workspacePath: string): string;
 }
