@@ -6,14 +6,10 @@ export interface GcsPath {
 }
 
 export function parseGcsUri(uri: string): GcsPath {
-    const withoutProtocol = uri.substring(5); // remove gs://
-    const firstSlash = withoutProtocol.indexOf('/');
-    if (firstSlash === -1) {
-        return { bucket: withoutProtocol, prefix: '' };
-    }
+    const url = new URL(uri);
     return {
-        bucket: withoutProtocol.substring(0, firstSlash),
-        prefix: withoutProtocol.substring(firstSlash + 1)
+        bucket: url.host,
+        prefix: url.pathname.startsWith('/') ? url.pathname.substring(1) : url.pathname
     };
 }
 
