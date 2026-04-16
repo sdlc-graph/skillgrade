@@ -10,7 +10,10 @@ import { runBrowserPreview } from '../reporters/browser';
 
 export async function runPreview(dir: string, mode: 'cli' | 'browser', outputDir?: string) {
     const base = outputDir || path.join(os.tmpdir(), 'skillgrade');
-    const resultsDir = path.join(base, path.basename(dir), 'results');
+    const skillName = path.basename(dir);
+    const resultsDir = base.startsWith('gs://')
+        ? (base.endsWith('/') ? `${base}${skillName}/results` : `${base}/${skillName}/results`)
+        : path.join(base, skillName, 'results');
 
     if (mode === 'browser') {
         await runBrowserPreview(resultsDir);

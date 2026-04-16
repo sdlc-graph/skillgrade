@@ -8,6 +8,7 @@ import {
 import { ResolvedGrader, TrialConfig } from './core/config.types';
 import { getGrader } from './graders';
 import { fmt, Spinner } from './utils/cli';
+import { getReportStore } from './core/storage';
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
     return new Promise<T>((resolve, reject) => {
@@ -498,11 +499,10 @@ export class EvalRunner {
     private async saveReport(report: EvalReport): Promise<void> {
         if (!this.logDir) return;
 
-        await fs.ensureDir(this.logDir);
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${report.task}_${timestamp}.json`;
-        const filePath = path.join(this.logDir, fileName);
 
-        await fs.writeJSON(filePath, report, { spaces: 2 });
+        const store = getReportStore(this.logDir);
+        await store.saveReport(fileName, report);
     }
 }
