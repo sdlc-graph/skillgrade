@@ -72,8 +72,6 @@ export class LocalProvider implements EnvironmentProvider {
                 await fs.move(stagingSkillgrade, path.join(tempDir, '.skillgrade'), { overwrite: true });
             }
 
-
-
             // Clean up staging area
             await fs.remove(stagingDir);
 

@@ -1,5 +1,12 @@
 import { ExpectedTool } from '../types';
 
+/**
+ * Eval configuration types.
+ *
+ * These types define the schema for the configuration file (e.g. eval.yaml)
+ * that developers create to define evaluation tasks for their skills.
+ */
+
 /** Workspace file mapping: copy a local file into the container */
 export interface WorkspaceMapping {
     src?: string;       // relative to configuration file
