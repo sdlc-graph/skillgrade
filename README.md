@@ -184,6 +184,10 @@ trialConfig:
   cleanup: scripts/cleanup.sh
 ```
 
+### Workspace Isolation
+
+By default, **no files are auto-included** in the execution environment (neither in Docker nor in Local provider). You must explicitly specify all files and directories needed for the task in the `workspace` sections.
+
 ### Workspace Inline Content
 
 For `workspace` mappings, you can use the `content` field instead of `src` to provide the file content directly in `eval.yaml`. This is useful for small configuration files or scripts. It writes the content to a file in a `workspace_files/` subdirectory within the build context and uses standard `COPY` under the hood.
