@@ -141,12 +141,13 @@ export async function runEvals(dir: string, opts: RunOptions) {
             graderModel: resolved.grader_model,
             environment: resolved.environment,
             trialConfig: {
-                setup: resolved.trialConfig?.setup ? 'bash scripts/trial_setup.sh' : undefined,
-                cleanup: resolved.trialConfig?.cleanup ? 'bash scripts/trial_cleanup.sh' : undefined,
+                setup: resolved.trialConfig?.setup ? 'bash .skillgrade/scripts/trial_setup.sh' : undefined,
+                cleanup: resolved.trialConfig?.cleanup ? 'bash .skillgrade/scripts/trial_cleanup.sh' : undefined,
                 env: resolved.trialConfig?.env,
             },
             agentWorkingDir: resolved.agentWorkingDir,
             earlyStop: resolved.early_stop,
+            workspace: resolved.workspace,
         };
 
         // Pick agent: CLI flag > task-level override > auto-detect from API key > default
@@ -268,62 +269,72 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
     await fs.ensureDir(tmpDir);
 
     // Write each deterministic grader script
-    await fs.ensureDir(path.join(tmpDir, 'tests'));
     const detGraders = resolved.graders.filter(g => g.type === 'deterministic');
-    for (let i = 0; i < detGraders.length; i++) {
-        if (detGraders[i].run) {
-            const script = `#!/bin/bash\n${detGraders[i].run!.trim()}\n`;
-            const filename = i === 0 ? 'test.sh' : `test_${i}.sh`;
-            await fs.writeFile(path.join(tmpDir, 'tests', filename), script);
-        }
-    }
-
-    // Copy referenced grader files/directories
-    for (const g of resolved.graders) {
-        if (g.type === 'deterministic' && g.run) {
-            const pathMatches = g.run.match(/[\w./-]+\.\w{1,4}/g) || [];
-            for (const ref of pathMatches) {
-                const refDir = ref.split('/')[0];
-                const srcDir = path.resolve(baseDir, refDir);
-                const destDir = path.join(tmpDir, refDir);
-                if (refDir !== ref && await fs.pathExists(srcDir) && !await fs.pathExists(destDir)) {
-                    await fs.copy(srcDir, destDir);
-                }
+    if (detGraders.length > 0) {
+        await fs.ensureDir(path.join(tmpDir, '.skillgrade', 'tests'));
+        for (let i = 0; i < detGraders.length; i++) {
+            if (detGraders[i].run) {
+                const script = `#!/bin/bash\n${detGraders[i].run!.trim()}\n`;
+                const filename = i === 0 ? 'test.sh' : `test_${i}.sh`;
+                await fs.writeFile(path.join(tmpDir, '.skillgrade', 'tests', filename), script);
             }
         }
     }
 
+
+
     // Write each LLM rubric
-    await fs.ensureDir(path.join(tmpDir, 'prompts'));
     const llmGraders = resolved.graders.filter(g => g.type === 'llm_rubric');
-    for (let i = 0; i < llmGraders.length; i++) {
-        if (llmGraders[i].rubric) {
-            const filename = i === 0 ? 'quality.md' : `quality_${i}.md`;
-            await fs.writeFile(path.join(tmpDir, 'prompts', filename), llmGraders[i].rubric!);
+    if (llmGraders.length > 0) {
+        await fs.ensureDir(path.join(tmpDir, '.skillgrade', 'prompts'));
+        for (let i = 0; i < llmGraders.length; i++) {
+            if (llmGraders[i].rubric) {
+                const filename = i === 0 ? 'quality.md' : `quality_${i}.md`;
+                await fs.writeFile(path.join(tmpDir, '.skillgrade', 'prompts', filename), llmGraders[i].rubric!);
+            }
         }
     }
 
-    // Write trial setup and cleanup scripts
-    if (resolved.trialConfig) {
-        await fs.ensureDir(path.join(tmpDir, 'scripts'));
+    const ensureShebang = (content: string) => {
+        if (content.startsWith('#!')) return content;
+        return `#!/bin/bash\n\n${content}`;
+    };
 
-        const ensureShebang = (content: string) => {
-            if (content.startsWith('#!')) return content;
-            return `#!/bin/bash\n\n${content}`;
-        };
+    // Write trial setup and cleanup scripts
+    if (resolved.trialConfig?.setup || resolved.trialConfig?.cleanup) {
+        await fs.ensureDir(path.join(tmpDir, '.skillgrade', 'scripts'));
 
         if (resolved.trialConfig.setup) {
             await fs.writeFile(
-                path.join(tmpDir, 'scripts', 'trial_setup.sh'),
+                path.join(tmpDir, '.skillgrade', 'scripts', 'trial_setup.sh'),
                 ensureShebang(resolved.trialConfig.setup.trim())
             );
         }
         if (resolved.trialConfig.cleanup) {
             await fs.writeFile(
-                path.join(tmpDir, 'scripts', 'trial_cleanup.sh'),
+                path.join(tmpDir, '.skillgrade', 'scripts', 'trial_cleanup.sh'),
                 ensureShebang(resolved.trialConfig.cleanup.trim())
             );
         }
+    }
+
+    // Write general setup script (for local provider to simulate docker setup)
+    let setupCommands = '';
+    if (resolved.docker.setup) {
+        setupCommands += `${resolved.docker.setup.trim()}\n`;
+    }
+    for (const g of resolved.graders) {
+        if (g.setup) {
+            setupCommands += `${g.setup.trim()}\n`;
+        }
+    }
+
+    if (setupCommands) {
+        await fs.ensureDir(path.join(tmpDir, '.skillgrade', 'scripts'));
+        await fs.writeFile(
+            path.join(tmpDir, '.skillgrade', 'scripts', 'setup.sh'),
+            ensureShebang(setupCommands)
+        );
     }
 
     // Write Dockerfile
@@ -338,18 +349,6 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
             dockerfileContent += `RUN npm install -g @anthropic-ai/claude-code\n\n`;
         } else if (resolved.agent === 'codex') {
             dockerfileContent += `RUN npm install -g @openai/codex\n\n`;
-        }
-    }
-
-    // Docker setup commands
-    if (resolved.docker.setup) {
-        dockerfileContent += `RUN ${resolved.docker.setup.trim()}\n\n`;
-    }
-
-    // Grader setup commands
-    for (const g of resolved.graders) {
-        if (g.setup) {
-            dockerfileContent += `# Grader setup\nRUN ${g.setup.trim()}\n\n`;
         }
     }
 
@@ -382,6 +381,22 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
         }
     }
 
-    dockerfileContent += `\nCOPY . .\nCMD ["bash"]\n`;
+    // Docker setup commands
+    if (resolved.docker.setup) {
+        dockerfileContent += `RUN ${resolved.docker.setup.trim()}\n\n`;
+    }
+
+    // Grader setup commands
+    for (const g of resolved.graders) {
+        if (g.setup) {
+            dockerfileContent += `# Grader setup\nRUN ${g.setup.trim()}\n\n`;
+        }
+    }
+    // Copy .skillgrade directory if it exists
+    if (await fs.pathExists(path.join(tmpDir, '.skillgrade'))) {
+        dockerfileContent += `COPY .skillgrade .skillgrade\n`;
+    }
+
+    dockerfileContent += `\nCMD ["bash"]\n`;
     await fs.writeFile(path.join(tmpDir, 'environment', 'Dockerfile'), dockerfileContent);
 }

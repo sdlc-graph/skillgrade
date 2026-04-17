@@ -75,6 +75,14 @@ export abstract class BaseAgent {
     ): Promise<string>;
 }
 
+/** Workspace file mapping: copy a local file into the container */
+export interface WorkspaceMapping {
+    src?: string;       // relative to configuration file
+    content?: string;   // inline content
+    dest: string;       // path in container (relative = in /workspace, absolute = absolute)
+    chmod?: string;     // e.g. "+x"
+}
+
 /** Options passed to environment providers for setup */
 export interface EnvironmentSetupOpts {
     timeoutSec: number;
@@ -84,6 +92,8 @@ export interface EnvironmentSetupOpts {
         memory_mb: number;
         mounts?: string[];
     };
+    workspace?: WorkspaceMapping[];
+    agentWorkingDir?: string;
 }
 
 export interface EnvironmentProvider {
@@ -97,4 +107,5 @@ export interface EnvironmentProvider {
     teardown?(): Promise<void>;
     runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal; earlyStop?: EarlyStopConfig }): Promise<CommandResult>;
     diagnose?(workspacePath: string): Promise<string>;
+    resolveWorkspacePath?(filePath: string, workspacePath: string): string;
 }

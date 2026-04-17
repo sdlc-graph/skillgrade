@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import {
     BaseAgent, EnvironmentProvider,
-    LogEntry, TrialResult, EvalReport, GraderResult, EarlyStopConfig
+    LogEntry, TrialResult, EvalReport, GraderResult, WorkspaceMapping, EarlyStopConfig
 } from './types';
 import { ResolvedGrader, TrialConfig } from './core/config.types';
 import { getGrader } from './graders';
@@ -65,6 +65,7 @@ export interface EvalRunOptions {
     agentWorkingDir?: string;
     noSkills?: boolean;
     earlyStop?: EarlyStopConfig;
+    workspace?: WorkspaceMapping[];
 }
 
 export class EvalRunner {
@@ -244,7 +245,9 @@ export class EvalRunner {
         try {
             workspace = await this.provider.setup(taskPath, skillsPaths, {
                 timeoutSec: opts.timeoutSec,
-                environment: opts.environment
+                environment: opts.environment,
+                workspace: opts.workspace,
+                agentWorkingDir: opts.agentWorkingDir
             }, trialEnv);
             const instruction = opts.instruction;
 
@@ -294,6 +297,10 @@ export class EvalRunner {
             }, agentTimeoutMs);
 
             try {
+                const agentWorkingDir = (opts.agentWorkingDir && this.provider.resolveWorkspacePath)
+                    ? this.provider.resolveWorkspacePath(opts.agentWorkingDir, workspace)
+                    : opts.agentWorkingDir;
+
                 agentLogs = await withTimeout(
                     agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir: opts.agentWorkingDir, signal: abortController.signal, earlyStop: opts.earlyStop }),
                     agentTimeoutMs + 5000, // Grace period to allow agent.run to resolve with partial logs
@@ -343,10 +350,10 @@ export class EvalRunner {
                 const graderConfig = {
                     type: graderDef.type,
                     command: graderDef.type === 'deterministic'
-                        ? `bash tests/${detIndex === 0 ? 'test.sh' : `test_${detIndex}.sh`}`
+                        ? `bash .skillgrade/tests/${detIndex === 0 ? 'test.sh' : `test_${detIndex}.sh`}`
                         : undefined,
                     rubric: graderDef.type === 'llm_rubric'
-                        ? `prompts/${llmIndex === 0 ? 'quality.md' : `quality_${llmIndex}.md`}`
+                        ? `.skillgrade/prompts/${llmIndex === 0 ? 'quality.md' : `quality_${llmIndex}.md`}`
                         : undefined,
                     model: graderDef.model || opts.graderModel,
                     weight: graderDef.weight,
