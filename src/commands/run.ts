@@ -303,14 +303,14 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
     }
 
     // Write trial setup and cleanup scripts
+    await fs.ensureDir(path.join(tmpDir, 'scripts'));
+
+    const ensureShebang = (content: string) => {
+        if (content.startsWith('#!')) return content;
+        return `#!/bin/bash\n\n${content}`;
+    };
+
     if (resolved.trialConfig) {
-        await fs.ensureDir(path.join(tmpDir, 'scripts'));
-
-        const ensureShebang = (content: string) => {
-            if (content.startsWith('#!')) return content;
-            return `#!/bin/bash\n\n${content}`;
-        };
-
         if (resolved.trialConfig.setup) {
             await fs.writeFile(
                 path.join(tmpDir, 'scripts', 'trial_setup.sh'),
@@ -323,6 +323,24 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
                 ensureShebang(resolved.trialConfig.cleanup.trim())
             );
         }
+    }
+
+    // Write general setup script (for local provider to simulate docker setup)
+    let setupCommands = '';
+    if (resolved.docker.setup) {
+        setupCommands += `${resolved.docker.setup.trim()}\n`;
+    }
+    for (const g of resolved.graders) {
+        if (g.setup) {
+            setupCommands += `${g.setup.trim()}\n`;
+        }
+    }
+
+    if (setupCommands) {
+        await fs.writeFile(
+            path.join(tmpDir, 'scripts', 'setup.sh'),
+            ensureShebang(setupCommands)
+        );
     }
 
     // Write Dockerfile

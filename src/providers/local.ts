@@ -30,6 +30,14 @@ export class LocalProvider implements EnvironmentProvider {
                 }
             }
 
+            const setupScriptPath = path.join(tempDir, 'scripts', 'setup.sh');
+            if (await fs.pathExists(setupScriptPath)) {
+                const result = await this.runCommand(tempDir, 'bash scripts/setup.sh', env);
+                if (result.exitCode !== 0) {
+                    throw new Error(`Setup commands failed with exit code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
+                }
+            }
+
             if (opts.trialSetup) {
                 const result = await this.runCommand(tempDir, opts.trialSetup, env);
                 if (result.exitCode !== 0) {

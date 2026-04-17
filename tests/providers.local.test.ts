@@ -101,6 +101,28 @@ describe('LocalProvider', () => {
       const calledWithPath = spyCleanup.mock.calls[0][0];
       expect(await fsExtra.pathExists(calledWithPath)).toBe(false);
     });
+
+    it('executes scripts/setup.sh if it exists', async () => {
+      const taskDir = path.join(os.tmpdir(), `skillgrade-test-task-${Date.now()}`);
+      await fsExtra.ensureDir(taskDir);
+      await fsExtra.ensureDir(path.join(taskDir, 'scripts'));
+      await fsExtra.writeFile(path.join(taskDir, 'scripts', 'setup.sh'), '#!/bin/bash\necho "setup executed" > setup_done.txt');
+      tempDirs.push(taskDir);
+
+      const taskConfig = {
+        version: '1',
+        graders: [],
+        agent: { timeout_sec: 300 },
+        environment: { cpus: 2, memory_mb: 2048 },
+      };
+
+      const workspace = await provider.setup(taskDir, [], taskConfig as any);
+      tempDirs.push(workspace);
+
+      expect(await fsExtra.pathExists(path.join(workspace, 'setup_done.txt'))).toBe(true);
+      const content = await fsExtra.readFile(path.join(workspace, 'setup_done.txt'), 'utf-8');
+      expect(content.trim()).toBe('setup executed');
+    });
   });
 
   describe('cleanup', () => {
