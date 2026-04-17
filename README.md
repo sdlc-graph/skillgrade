@@ -154,6 +154,9 @@ tasks:
         model: gemini-2.0-flash          # optional model override
         weight: 0.3
 
+    early_stop:                          # stop early based on output pattern
+      pattern: '"type":"tool_use"'
+
     # Per-task overrides (optional)
     agent: claude
     trials: 10
@@ -201,6 +204,17 @@ workspace:
       - Write tests for all new features.
     dest: /root/.gemini/GEMINI.md
 ```
+
+### Early Stop
+
+You can configure a task to terminate early if a specific pattern appears in the agent's `stdout` JSON stream. This is useful for stopping execution immediately when a specific state is reached or an error occurs.
+
+```yaml
+early_stop:
+  pattern: '"type":"tool_use"'
+```
+
+This feature is currently optimized for the Gemini agent running in Docker.
 
 ### Docker Bind Mounts
 
