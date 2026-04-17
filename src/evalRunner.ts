@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import {
     BaseAgent, EnvironmentProvider,
-    LogEntry, TrialResult, EvalReport, GraderResult
+    LogEntry, TrialResult, EvalReport, GraderResult, WorkspaceMapping
 } from './types';
 import { ResolvedGrader, TrialConfig } from './core/config.types';
 import { getGrader } from './graders';
@@ -64,6 +64,7 @@ export interface EvalRunOptions {
     };
     agentWorkingDir?: string;
     noSkills?: boolean;
+    workspace?: WorkspaceMapping[];
 }
 
 export class EvalRunner {
@@ -243,7 +244,9 @@ export class EvalRunner {
         try {
             workspace = await this.provider.setup(taskPath, skillsPaths, {
                 timeoutSec: opts.timeoutSec,
-                environment: opts.environment
+                environment: opts.environment,
+                workspace: opts.workspace,
+                agentWorkingDir: opts.agentWorkingDir
             }, trialEnv);
             const instruction = opts.instruction;
 
@@ -293,8 +296,12 @@ export class EvalRunner {
             }, agentTimeoutMs);
 
             try {
+                const agentWorkingDir = (opts.agentWorkingDir && this.provider.resolveWorkspacePath)
+                    ? this.provider.resolveWorkspacePath(opts.agentWorkingDir, workspace)
+                    : opts.agentWorkingDir;
+
                 agentLogs = await withTimeout(
-                    agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir: opts.agentWorkingDir, signal: abortController.signal }),
+                    agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir, signal: abortController.signal }),
                     agentTimeoutMs + 5000, // Grace period to allow agent.run to resolve with partial logs
                     `Agent (limit: ${opts.timeoutSec}s)`
                 );

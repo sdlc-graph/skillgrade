@@ -123,6 +123,63 @@ describe('LocalProvider', () => {
       const content = await fsExtra.readFile(path.join(workspace, 'setup_done.txt'), 'utf-8');
       expect(content.trim()).toBe('setup executed');
     });
+
+    it('processes workspace mappings and resolves /workspace prefix', async () => {
+      const taskDir = path.join(os.tmpdir(), `skillgrade-test-task-${Date.now()}`);
+      await fsExtra.ensureDir(taskDir);
+      
+      // Simulate prepareTempTaskDir behavior
+      await fsExtra.ensureDir(path.join(taskDir, 'workspace_files'));
+      await fsExtra.writeFile(path.join(taskDir, 'workspace_files', 'inline_file_1.tmp'), 'content 1');
+      await fsExtra.writeFile(path.join(taskDir, 'foo.txt'), 'content 2');
+      tempDirs.push(taskDir);
+
+      const taskConfig = {
+        version: '1',
+        graders: [],
+        agent: { timeout_sec: 300 },
+        environment: { cpus: 2, memory_mb: 2048 },
+        workspace: [
+          { content: 'content 1', dest: '/workspace/sub/file1.txt' },
+          { src: 'foo.txt', dest: 'file2.txt' }
+        ]
+      };
+
+      const workspace = await provider.setup(taskDir, [], taskConfig as any);
+      tempDirs.push(workspace);
+
+      expect(await fsExtra.readFile(path.join(workspace, 'sub', 'file1.txt'), 'utf-8')).toBe('content 1');
+      expect(await fsExtra.readFile(path.join(workspace, 'file2.txt'), 'utf-8')).toBe('content 2');
+    });
+  });
+
+  describe('resolveWorkspacePath', () => {
+    it('resolves /workspace prefix to workspace path', () => {
+      const workspacePath = '/tmp/skillgrade-xyz';
+      const resolved = provider.resolveWorkspacePath('/workspace/foo/bar', workspacePath);
+      expect(resolved).toBe('/tmp/skillgrade-xyz/foo/bar');
+    });
+
+    it('leaves non-/workspace paths as is', () => {
+      const workspacePath = '/tmp/skillgrade-xyz';
+      const resolved = provider.resolveWorkspacePath('/tmp/foo', workspacePath);
+      expect(resolved).toBe('/tmp/foo');
+    });
+
+    it('expands environment variables in paths', () => {
+      const workspacePath = '/tmp/skillgrade-xyz';
+      process.env.FOO = 'bar';
+      process.env.BAZ = 'qux';
+      
+      const resolved1 = provider.resolveWorkspacePath('$FOO/file.txt', workspacePath);
+      expect(resolved1).toBe('/tmp/skillgrade-xyz/bar/file.txt');
+
+      const resolved2 = provider.resolveWorkspacePath('${BAZ}/file.txt', workspacePath);
+      expect(resolved2).toBe('/tmp/skillgrade-xyz/qux/file.txt');
+      
+      delete process.env.FOO;
+      delete process.env.BAZ;
+    });
   });
 
   describe('cleanup', () => {

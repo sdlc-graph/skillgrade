@@ -4,11 +4,65 @@ import { spawn } from 'child_process';
 import { EnvironmentProvider, EnvironmentSetupOpts, CommandResult } from '../types';
 
 export class LocalProvider implements EnvironmentProvider {
+    resolveWorkspacePath(filePath: string, workspacePath: string): string {
+        let resolved = filePath;
+        
+        // Expand environment variables like ${VAR}
+        resolved = resolved.replace(/\$\{([a-zA-Z_][a-zA-Z0-9_]*)\}/g, (_, varName) => {
+            return process.env[varName] ?? `\${${varName}}`;
+        });
+        
+        // Expand environment variables like $VAR
+        resolved = resolved.replace(/\$([a-zA-Z_][a-zA-Z0-9_]*)/g, (_, varName) => {
+            return process.env[varName] ?? `$${varName}`;
+        });
+
+        if (resolved.startsWith('/workspace')) {
+            return path.join(workspacePath, resolved.substring('/workspace'.length));
+        }
+        if (!path.isAbsolute(resolved)) {
+            return path.join(workspacePath, resolved);
+        }
+        return resolved;
+    }
+
     async setup(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string> {
         const tempDir = path.join('/tmp', `skillgrade-${Math.random().toString(36).substring(7)}`);
         await fs.ensureDir(tempDir);
         try {
             await fs.copy(taskPath, tempDir);
+
+            // Process workspace mappings
+            if (opts.workspace) {
+                let inlineFileCount = 0;
+                for (const w of opts.workspace) {
+                    let srcPath = '';
+                    if (w.content !== undefined) {
+                        inlineFileCount++;
+                        srcPath = path.join(tempDir, 'workspace_files', `inline_file_${inlineFileCount}.tmp`);
+                    } else if (w.src) {
+                        srcPath = path.join(tempDir, path.basename(w.src));
+                    }
+
+                    if (srcPath && await fs.pathExists(srcPath)) {
+                        const destPath = this.resolveWorkspacePath(w.dest, tempDir);
+                        await fs.ensureDir(path.dirname(destPath));
+                        await fs.move(srcPath, destPath, { overwrite: true });
+                        if (w.chmod) {
+                            if (w.chmod === '+x') {
+                                const stat = await fs.stat(destPath);
+                                await fs.chmod(destPath, stat.mode | 0o111);
+                            } else {
+                                try {
+                                    await fs.chmod(destPath, parseInt(w.chmod, 8));
+                                } catch (e) {
+                                    console.warn(`[LocalProvider] Failed to apply chmod ${w.chmod} to ${destPath}`);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 
             // Inject skills into agent discovery paths
             // Gemini: .agents/skills/  |  Claude: .claude/skills/
