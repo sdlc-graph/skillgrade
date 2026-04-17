@@ -102,7 +102,16 @@ export class LLMGrader implements Grader {
             };
         }
 
-        const rubric = await fs.readFile(rubricPath, 'utf-8');
+        const rubricContent = await fs.readFile(rubricPath, 'utf-8');
+        let questions: string[] = [];
+        try {
+            const parsed = JSON.parse(rubricContent);
+            if (Array.isArray(parsed)) {
+                questions = parsed.map((q: any) => q.question || q);
+            }
+        } catch (e) {
+            // Ignore
+        }
 
         // Build a comprehensive transcript for the LLM
         const sections: string[] = [];
@@ -132,24 +141,43 @@ export class LLMGrader implements Grader {
 
         const transcript = sections.join('\n\n');
 
-        const prompt = `You are an evaluation judge. Score the following agent session on a scale from 0.0 to 1.0 based on the rubric below.
+        let prompt = `You are an evaluation judge. Score the following agent session on a scale from 0.0 to 1.0 based on the rubric below.
 
 IMPORTANT CONTEXT: The agent runs inside a CLI wrapper (e.g., Gemini CLI). The agent's tool calls (file edits, shell commands) appear as text in the "Agent Output" section. This is a real execution trace, not hallucination. The "Prior Grader Results" section shows objective automated test results that verify the actual filesystem state after the agent ran.
 
 ## Rubric
-${rubric}
+${rubricContent}
 
 ## Session Transcript
 ${transcript}
 
 Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explanation>"}`;
 
+        if (questions.length > 0) {
+            prompt = `You are an evaluation judge. Score the following agent session based on the rubric below.
+For each question in the rubric, provide a score between 0.0 and 1.0 and a brief explanation.
+
+IMPORTANT CONTEXT: The agent runs inside a CLI wrapper (e.g., Gemini CLI). The agent's tool calls (file edits, shell commands) appear as text in the "Agent Output" section. This is a real execution trace, not hallucination. The "Prior Grader Results" section shows objective automated test results that verify the actual filesystem state after the agent ran.
+
+## Rubric
+${questions.map((q, i) => `${i+1}. ${q}`).join('\n')}
+
+## Session Transcript
+${transcript}
+
+Respond with ONLY a JSON object where the keys are the EXACT questions listed above:
+{
+  "Question 1 text": {"score": <number>, "reasoning": "<explanation>"},
+  "Question 2 text": ...
+}`;
+        }
+
         // Try Gemini API first, fall back to Anthropic
         const apiKey = env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
         const anthropicKey = env?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 
         if (apiKey) {
-            return this.callGemini(prompt, apiKey, config);
+            return this.callGemini(prompt, apiKey, config, questions);
         } else if (anthropicKey) {
             return this.callAnthropic(prompt, anthropicKey, config);
         }
@@ -162,11 +190,11 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
         };
     }
 
-    private async callGemini(prompt: string, apiKey: string, config: GraderConfig): Promise<GraderResult> {
+    private async callGemini(prompt: string, apiKey: string, config: GraderConfig, questions?: string[]): Promise<GraderResult> {
         const genAI = new GoogleGenerativeAI(apiKey);
             
         // Define the exact shape of the JSON
-        const schema: Schema = {
+        let schema: Schema = {
             type: SchemaType.OBJECT,
             properties: {
                 score: { type: SchemaType.NUMBER },
@@ -174,6 +202,29 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
             },
             required: ["score", "reasoning"],
         };
+
+        if (questions && questions.length > 0) {
+            const properties: Record<string, Schema> = {};
+            const required: string[] = [];
+            
+            for (const q of questions) {
+                properties[q] = {
+                    type: SchemaType.OBJECT,
+                    properties: {
+                        score: { type: SchemaType.NUMBER },
+                        reasoning: { type: SchemaType.STRING },
+                    },
+                    required: ["score", "reasoning"],
+                };
+                required.push(q);
+            }
+
+            schema = {
+                type: SchemaType.OBJECT,
+                properties: properties,
+                required: required,
+            };
+        }
 
         const model = genAI.getGenerativeModel({
             model: config.model || 'gemini-3-flash-preview',
@@ -202,6 +253,25 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
             
             try {
                 const parsed = JSON.parse(cleaned);
+                if (questions && questions.length > 0) {
+                    const scores: number[] = [];
+                    const detailsLines: string[] = [];
+                    for (const q of questions) {
+                        const evalItem = parsed[q];
+                        if (evalItem) {
+                            scores.push(evalItem.score);
+                            detailsLines.push(`  ${evalItem.score >= 0.5 ? '✓' : '✗'} ${q}: ${evalItem.reasoning}`);
+                        }
+                    }
+                    const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+                    return {
+                        grader_type: 'llm_rubric',
+                        score: avgScore,
+                        weight: config.weight,
+                        details: detailsLines.join('\n')
+                    };
+                }
+
                 return {
                     grader_type: 'llm_rubric',
                     score: parsed.score,
@@ -261,6 +331,17 @@ Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explan
             const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
+                if (parsed.evaluations) {
+                    const scores = parsed.evaluations.map((e: any) => e.score);
+                    const avgScore = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
+                    const details = parsed.evaluations.map((e: any) => `  ${e.score >= 0.5 ? '✓' : '✗'} ${e.question}: ${e.reasoning}`).join('\n');
+                    return {
+                        grader_type: 'llm_rubric',
+                        score: avgScore,
+                        weight: config.weight,
+                        details: details
+                    };
+                }
                 const score = Math.max(0, Math.min(1, parseFloat(parsed.score) || 0));
                 return {
                     grader_type: 'llm_rubric',

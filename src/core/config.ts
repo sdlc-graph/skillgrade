@@ -281,7 +281,11 @@ export async function resolveTask(
                 resolved.run = await resolveFileOrInline(g.run, baseDir);
             }
             if (g.type === 'llm_rubric' && g.rubric) {
-                resolved.rubric = await resolveFileOrInline(g.rubric, baseDir);
+                if (Array.isArray(g.rubric)) {
+                    resolved.rubric = JSON.stringify(g.rubric);
+                } else {
+                    resolved.rubric = await resolveFileOrInline(g.rubric, baseDir);
+                }
             }
             return resolved;
         })

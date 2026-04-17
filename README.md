@@ -277,18 +277,32 @@ echo "{\"score\":$score,\"details\":\"$passed/$total passed\",\"checks\":[{\"nam
 
 ### LLM Rubric
 
-Evaluates the agent's session transcript against qualitative criteria:
+Evaluates the agent's session transcript against qualitative criteria.
+
+**Question List Format (Recommended)**
+Ensures the model scores each question exactly once. Returns the average score.
+
+```yaml
+- type: llm_rubric
+  rubric:
+    - question: Did the agent follow the mandatory 3-step workflow?
+    - question: Did it complete in ≤5 commands?
+  weight: 0.3
+  model: gemini-2.0-flash    # optional
+```
+
+**Free-text Format**
+The legacy format is still supported. It returns a single score and reasoning.
 
 ```yaml
 - type: llm_rubric
   rubric: |
     Workflow Compliance (0-0.5):
     - Did the agent follow the mandatory 3-step workflow?
-
+    
     Efficiency (0-0.5):
     - Completed in ≤5 commands?
   weight: 0.3
-  model: gemini-2.0-flash    # optional, auto-detected from API key
 ```
 
 Uses Gemini or Anthropic based on available API key. Override with the `model` field.
