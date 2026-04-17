@@ -132,6 +132,8 @@ tasks:
       - src: bin/superlint
         dest: /usr/local/bin/superlint
         chmod: "+x"
+      - src: graders
+        dest: graders
       - content: |                       # inline file content
           # Gemini Custom Instructions
           Always use TypeScript for new files.
@@ -181,6 +183,10 @@ trialConfig:
   setup: scripts/setup.sh --flag
   cleanup: scripts/cleanup.sh
 ```
+
+### Workspace Isolation
+
+By default, **no files are auto-included** in the execution environment (neither in Docker nor in Local provider). You must explicitly specify all files and directories needed for the task in the `workspace` sections.
 
 ### Workspace Inline Content
 
