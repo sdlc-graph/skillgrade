@@ -30,7 +30,9 @@ export class LocalProvider implements EnvironmentProvider {
         const tempDir = path.join('/tmp', `skillgrade-${Math.random().toString(36).substring(7)}`);
         await fs.ensureDir(tempDir);
         try {
-            await fs.copy(taskPath, tempDir);
+            const stagingDir = path.join(tempDir, '.staging');
+            await fs.ensureDir(stagingDir);
+            await fs.copy(taskPath, stagingDir);
 
             // Process workspace mappings
             if (opts.workspace) {
@@ -39,9 +41,9 @@ export class LocalProvider implements EnvironmentProvider {
                     let srcPath = '';
                     if (w.content !== undefined) {
                         inlineFileCount++;
-                        srcPath = path.join(tempDir, 'workspace_files', `inline_file_${inlineFileCount}.tmp`);
+                        srcPath = path.join(stagingDir, 'workspace_files', `inline_file_${inlineFileCount}.tmp`);
                     } else if (w.src) {
-                        srcPath = path.join(tempDir, path.basename(w.src));
+                        srcPath = path.join(stagingDir, path.basename(w.src));
                     }
 
                     if (srcPath && await fs.pathExists(srcPath)) {
@@ -64,6 +66,17 @@ export class LocalProvider implements EnvironmentProvider {
                 }
             }
 
+            // Move .skillgrade if it exists
+            const stagingSkillgrade = path.join(stagingDir, '.skillgrade');
+            if (await fs.pathExists(stagingSkillgrade)) {
+                await fs.move(stagingSkillgrade, path.join(tempDir, '.skillgrade'), { overwrite: true });
+            }
+
+
+
+            // Clean up staging area
+            await fs.remove(stagingDir);
+
             // Inject skills into agent discovery paths
             // Gemini: .agents/skills/  |  Claude: .claude/skills/
             if (skillsPaths.length > 0) {
@@ -84,9 +97,9 @@ export class LocalProvider implements EnvironmentProvider {
                 }
             }
 
-            const setupScriptPath = path.join(tempDir, 'scripts', 'setup.sh');
+            const setupScriptPath = path.join(tempDir, '.skillgrade', 'scripts', 'setup.sh');
             if (await fs.pathExists(setupScriptPath)) {
-                const result = await this.runCommand(tempDir, 'bash scripts/setup.sh', env);
+                const result = await this.runCommand(tempDir, 'bash .skillgrade/scripts/setup.sh', env);
                 if (result.exitCode !== 0) {
                     throw new Error(`Setup commands failed with exit code ${result.exitCode}\nstdout: ${result.stdout}\nstderr: ${result.stderr}`);
                 }

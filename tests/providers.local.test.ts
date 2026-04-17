@@ -48,7 +48,7 @@ describe('LocalProvider', () => {
 
       expect(workspace).toContain('skillgrade-');
       expect(await fsExtra.pathExists(workspace)).toBe(true);
-      expect(await fsExtra.pathExists(path.join(workspace, 'task.toml'))).toBe(true);
+      expect(await fsExtra.pathExists(path.join(workspace, 'task.toml'))).toBe(false);
     });
 
     it('injects skills into discovery directories', async () => {
@@ -105,8 +105,8 @@ describe('LocalProvider', () => {
     it('executes scripts/setup.sh if it exists', async () => {
       const taskDir = path.join(os.tmpdir(), `skillgrade-test-task-${Date.now()}`);
       await fsExtra.ensureDir(taskDir);
-      await fsExtra.ensureDir(path.join(taskDir, 'scripts'));
-      await fsExtra.writeFile(path.join(taskDir, 'scripts', 'setup.sh'), '#!/bin/bash\necho "setup executed" > setup_done.txt');
+      await fsExtra.ensureDir(path.join(taskDir, '.skillgrade', 'scripts'));
+      await fsExtra.writeFile(path.join(taskDir, '.skillgrade', 'scripts', 'setup.sh'), '#!/bin/bash\necho "setup executed" > setup_done.txt');
       tempDirs.push(taskDir);
 
       const taskConfig = {

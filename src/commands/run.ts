@@ -329,8 +329,9 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
     }
 
     if (setupCommands) {
+        await fs.ensureDir(path.join(tmpDir, '.skillgrade', 'scripts'));
         await fs.writeFile(
-            path.join(tmpDir, 'scripts', 'setup.sh'),
+            path.join(tmpDir, '.skillgrade', 'scripts', 'setup.sh'),
             ensureShebang(setupCommands)
         );
     }
@@ -347,18 +348,6 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
             dockerfileContent += `RUN npm install -g @anthropic-ai/claude-code\n\n`;
         } else if (resolved.agent === 'codex') {
             dockerfileContent += `RUN npm install -g @openai/codex\n\n`;
-        }
-    }
-
-    // Docker setup commands
-    if (resolved.docker.setup) {
-        dockerfileContent += `RUN ${resolved.docker.setup.trim()}\n\n`;
-    }
-
-    // Grader setup commands
-    for (const g of resolved.graders) {
-        if (g.setup) {
-            dockerfileContent += `# Grader setup\nRUN ${g.setup.trim()}\n\n`;
         }
     }
 
@@ -390,12 +379,22 @@ export async function prepareTempTaskDir(resolved: ResolvedTask, baseDir: string
             }
         }
     }
+
+    // Docker setup commands
+    if (resolved.docker.setup) {
+        dockerfileContent += `RUN ${resolved.docker.setup.trim()}\n\n`;
+    }
+
+    // Grader setup commands
+    for (const g of resolved.graders) {
+        if (g.setup) {
+            dockerfileContent += `# Grader setup\nRUN ${g.setup.trim()}\n\n`;
+        }
+    }
     // Copy .skillgrade directory if it exists
     if (await fs.pathExists(path.join(tmpDir, '.skillgrade'))) {
         dockerfileContent += `COPY .skillgrade .skillgrade\n`;
     }
-    
-
 
     dockerfileContent += `\nCMD ["bash"]\n`;
     await fs.writeFile(path.join(tmpDir, 'environment', 'Dockerfile'), dockerfileContent);
