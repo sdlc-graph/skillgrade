@@ -132,6 +132,8 @@ tasks:
       - src: bin/superlint
         dest: /usr/local/bin/superlint
         chmod: "+x"
+      - src: graders
+        dest: graders
       - content: |                       # inline file content
           # Gemini Custom Instructions
           Always use TypeScript for new files.
