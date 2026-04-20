@@ -394,7 +394,12 @@ export class EvalRunner {
                 .reduce((sum, e) => sum + estimateTokens((e.output || '') + (e.stdout || '') + (e.stderr || '')), 0);
 
             const status = reward >= 0.5 ? fmt.pass('PASS') : fmt.fail('FAIL');
-            spinner.stop(`${status}  ${fmt.bold(reward.toFixed(2))}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}  ${fmt.dim(commandCount + ' cmds')}`);
+            const graderStr = graderResults.map(g => {
+                const scoreStr = g.score.toFixed(2);
+                const color = g.score >= 0.5 ? fmt.green(scoreStr) : fmt.red(scoreStr);
+                return `${fmt.dim(g.grader_type)} ${color}`;
+            }).join('  ');
+            spinner.stop(`${status}  ${fmt.bold(reward.toFixed(2))}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}  ${fmt.dim(commandCount + ' cmds')}  ${graderStr}`);
 
             return {
                 trial_id: index + 1,
