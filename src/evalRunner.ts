@@ -359,12 +359,33 @@ export class EvalRunner {
                     expectedTools: graderDef.expectedTools,
                 };
 
-                const graderTimeoutMs = (opts.graderTimeoutSec ?? 120) * 1000;
-                const result = await withTimeout(
-                    grader.grade(workspace, this.provider, graderConfig, taskPath, sessionLog, trialEnv),
-                    graderTimeoutMs,
-                    `Grader ${graderDef.type} (limit: ${opts.graderTimeoutSec ?? 120}s)`
-                );
+                let result: GraderResult | undefined;
+                if (graderDef.type === 'llm_rubric') {
+                    let lastError: any;
+                    for (let attempt = 1; attempt <= 10; attempt++) {
+                        try {
+                            result = await withTimeout(
+                                grader.grade(workspace, this.provider, graderConfig, taskPath, sessionLog, trialEnv),
+                                30 * 1000,
+                                `Grader llm_rubric (attempt ${attempt}/10, limit: 30s)`
+                            );
+                            break;
+                        } catch (err) {
+                            lastError = err;
+                            console.warn(`[Grader llm_rubric attempt ${attempt}/10 failed: ${err instanceof Error ? err.message : String(err)}]`);
+                        }
+                    }
+                    if (!result) {
+                        throw lastError;
+                    }
+                } else {
+                    const graderTimeoutMs = (opts.graderTimeoutSec ?? 120) * 1000;
+                    result = await withTimeout(
+                        grader.grade(workspace, this.provider, graderConfig, taskPath, sessionLog, trialEnv),
+                        graderTimeoutMs,
+                        `Grader ${graderDef.type} (limit: ${opts.graderTimeoutSec ?? 120}s)`
+                    );
+                }
                 graderResults.push(result);
 
                 sessionLog.push({
