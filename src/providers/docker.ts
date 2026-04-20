@@ -252,8 +252,6 @@ export class DockerProvider implements EnvironmentProvider {
                                     kill -9 -$pid 2>/dev/null || kill -9 $pid 2>/dev/null
                                     pkill -9 -P $pid 2>/dev/null || true
                                 fi
-                                pkill -9 -f "gemini" 2>/dev/null || true
-                                pkill -9 -f "node" 2>/dev/null || true
                             `]
                         });
                         const killStream = await killExec.start({});
@@ -263,7 +261,7 @@ export class DockerProvider implements EnvironmentProvider {
                             setTimeout(r, 1000); 
                         });
                     } catch (e) {
-                        console.error(`[Failed to abort/kill Gemini CLI processes: ${e}]`);
+                        console.error(`[Failed to abort/kill processes: ${e}]`);
                     }
                     
                     resolve({ stdout: stdoutData, stderr: stderrData });

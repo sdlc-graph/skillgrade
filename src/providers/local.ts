@@ -27,7 +27,8 @@ export class LocalProvider implements EnvironmentProvider {
     }
 
     async setup(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string> {
-        const tempDir = path.join('/tmp', `skillgrade-${Math.random().toString(36).substring(7)}`);
+        const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+        const tempDir = path.join('/tmp', `skillgrade-${uniqueId}`);
         await fs.ensureDir(tempDir);
         try {
             const stagingDir = path.join(tempDir, '.staging');
@@ -128,7 +129,8 @@ export class LocalProvider implements EnvironmentProvider {
             const child = spawn(command, {
                 shell: true,
                 cwd: workspacePath,
-                env: { ...process.env, ...env }
+                env: { ...process.env, ...env },
+                detached: true
             });
 
             let stdout = '';
@@ -139,12 +141,15 @@ export class LocalProvider implements EnvironmentProvider {
 
             if (opts?.signal) {
                 const onAbort = () => {
-                    try {
-                        child.kill('SIGTERM');
-                        setTimeout(() => {
-                            try { child.kill('SIGKILL'); } catch (e) {}
-                        }, 1000);
-                    } catch (e) {}
+                    if (child.pid) {
+                        const pid = child.pid;
+                        try {
+                            process.kill(-pid, 'SIGTERM');
+                            setTimeout(() => {
+                                try { process.kill(-pid, 'SIGKILL'); } catch (e) {}
+                            }, 1000);
+                        } catch (e) {}
+                    }
                 };
                 if (opts.signal.aborted) {
                     onAbort();

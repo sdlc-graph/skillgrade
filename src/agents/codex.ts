@@ -8,12 +8,17 @@ export class CodexAgent extends BaseAgent {
         options?: { agentWorkingDir?: string; signal?: AbortSignal }
     ): Promise<string> {
         // Write instruction to a temp file to avoid shell escaping issues with long prompts
+        const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2)}`;
+        const promptFile = `/tmp/.prompt-${uniqueId}.md`;
         const b64 = Buffer.from(instruction).toString('base64');
-        await runCommand(`echo '${b64}' | base64 -d > /tmp/.prompt.md`);
+        await runCommand(`echo '${b64}' | base64 -d > ${promptFile}`);
 
-        const command = `codex --approval-mode full-auto "$(cat /tmp/.prompt.md)"`;
+        const command = `codex --approval-mode full-auto "$(cat ${promptFile})"`;
         const fullCommand = options?.agentWorkingDir ? `cd ${options.agentWorkingDir} && ${command}` : command;
         const result = await runCommand(fullCommand, { signal: options?.signal });
+
+        // Clean up prompt file
+        await runCommand(`rm ${promptFile}`);
 
         if (result.exitCode !== 0) {
             console.error('CodexAgent: Codex CLI failed to execute correctly.');
