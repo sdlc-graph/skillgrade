@@ -1,0 +1,878 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SkillGrade</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet">
+  <style>
+    /* ─── Reset & Base ──────────────────────────────────────── */
+    *,
+    *::before,
+    *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    :root {
+      --font: 'Inter', -apple-system, system-ui, sans-serif;
+      --mono: 'JetBrains Mono', 'Menlo', monospace;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --transition: 0.2s ease;
+
+      /* Light theme (default) */
+      --bg: #f8f9fc;
+      --bg-card: #ffffff;
+      --bg-code: #f1f3f8;
+      --bg-hover: #f0f2f7;
+      --border: #e2e5ed;
+      --text: #1a1d27;
+      --text-secondary: #5c6370;
+      --text-muted: #9099a8;
+      --accent: #1a1d27;
+      --accent-hover: #333;
+      --green: #22c55e;
+      --green-bg: #ecfdf5;
+      --green-border: #bbf7d0;
+      --red: #ef4444;
+      --red-bg: #fef2f2;
+      --red-border: #fecaca;
+      --yellow: #f59e0b;
+      --yellow-bg: #fffbeb;
+      --purple: #6b7280;
+      --purple-bg: #f3f4f6;
+      --blue: #6b7280;
+      --blue-bg: #f3f4f6;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+      --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.08);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0c0d12;
+      --bg-card: #14161e;
+      --bg-code: #1a1d28;
+      --bg-hover: #1c1f2b;
+      --border: #262a38;
+      --text: #e4e7ef;
+      --text-secondary: #8b92a5;
+      --text-muted: #565d72;
+      --accent: #e4e7ef;
+      --accent-hover: #ccc;
+      --green: #34d87a;
+      --green-bg: #0c2618;
+      --green-border: #1a4a30;
+      --red: #f87171;
+      --red-bg: #2a1216;
+      --red-border: #4a2228;
+      --yellow: #fbbf24;
+      --yellow-bg: #261f0c;
+      --purple: #9ca3af;
+      --purple-bg: #1f2937;
+      --blue: #9ca3af;
+      --blue-bg: #1f2937;
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      --shadow-lg: 0 4px 12px rgba(0, 0, 0, 0.4);
+    }
+
+    html {
+      font-size: 15px;
+    }
+
+    body {
+      font-family: var(--font);
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      transition: background var(--transition), color var(--transition);
+      min-height: 100vh;
+    }
+
+    /* ─── Layout ────────────────────────────────────────────── */
+    .shell {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 2rem;
+      padding-bottom: 1.25rem;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .topbar h1 {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .topbar h1 span {
+      color: var(--accent);
+    }
+
+    .theme-btn {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 0.4rem 0.85rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+      color: var(--text-secondary);
+      transition: all var(--transition);
+    }
+
+    .theme-btn:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* ─── Reports List ──────────────────────────────────────── */
+    .reports-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .report-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto auto auto;
+      gap: 1.25rem;
+      align-items: center;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      cursor: pointer;
+      transition: all var(--transition);
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .report-row:hover {
+      border-color: var(--accent);
+      box-shadow: var(--shadow-lg);
+      transform: translateY(-1px);
+    }
+
+    .report-task {
+      font-weight: 600;
+      font-size: 0.95rem;
+    }
+
+    .report-file {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .report-metric {
+      text-align: center;
+    }
+
+    .report-metric .val {
+      font-weight: 700;
+      font-size: 1.1rem;
+    }
+
+    .report-metric .lbl {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-muted);
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 0.15rem 0.55rem;
+      border-radius: 999px;
+      font-size: 0.72rem;
+      font-weight: 600;
+    }
+
+    .badge-pass {
+      background: var(--green-bg);
+      color: var(--green);
+      border: 1px solid var(--green-border);
+    }
+
+    .badge-fail {
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid var(--red-border);
+    }
+
+    .badge-type {
+      background: var(--purple-bg);
+      color: var(--purple);
+    }
+
+    .badge-blue {
+      background: var(--blue-bg);
+      color: var(--blue);
+    }
+
+    .badge-yellow {
+      background: var(--yellow-bg);
+      color: var(--yellow);
+      border: 1px solid var(--yellow-border);
+    }
+
+    .delete-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      cursor: pointer;
+      padding: 0.3rem 0.6rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.75rem;
+      transition: all var(--transition);
+      display: flex;
+      align-items: center;
+      gap: 0.3rem;
+    }
+
+    .delete-btn:hover {
+      border-color: var(--red);
+      color: var(--red);
+      background: var(--red-bg);
+    }
+
+    .btn-danger {
+      background: var(--red-bg);
+      color: var(--red);
+      border: 1px solid var(--red-border);
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius);
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: all var(--transition);
+    }
+
+    .btn-danger:hover {
+      background: var(--red);
+      color: #fff;
+    }
+
+    /* ─── Detail View ───────────────────────────────────────── */
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      color: var(--accent);
+      text-decoration: none;
+      font-size: 0.9rem;
+      font-weight: 500;
+      margin-bottom: 1.25rem;
+    }
+
+    .back-link:hover {
+      text-decoration: underline;
+    }
+
+    .detail-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      margin-bottom: 1.5rem;
+    }
+
+    .detail-header {
+      margin-bottom: 0;
+    }
+
+    .detail-header h2 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .detail-stats {
+      display: flex;
+      gap: 1.5rem;
+      margin-top: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-pill {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 0.6rem 1rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .stat-pill .val {
+      font-weight: 700;
+      font-size: 1.2rem;
+    }
+
+    .stat-pill .lbl {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    /* ─── Trial Card ────────────────────────────────────────── */
+    .trial-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      margin-bottom: 0.75rem;
+      overflow: hidden;
+    }
+
+    .trial-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.85rem 1.25rem;
+      cursor: pointer;
+      transition: background var(--transition);
+    }
+
+    .trial-header:hover {
+      background: var(--bg-hover);
+    }
+
+    .trial-number {
+      font-weight: 700;
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      min-width: 4rem;
+    }
+
+    .trial-reward {
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .trial-reward.pass {
+      color: var(--green);
+    }
+
+    .trial-reward.fail {
+      color: var(--red);
+    }
+
+    .trial-meta {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      margin-left: auto;
+      display: flex;
+      gap: 1rem;
+    }
+
+    .trial-chevron {
+      color: var(--text-muted);
+      transition: transform var(--transition);
+      font-size: 0.8rem;
+    }
+
+    .trial-card.open .trial-chevron {
+      transform: rotate(90deg);
+    }
+
+    .trial-body {
+      display: none;
+      border-top: 1px solid var(--border);
+    }
+
+    .trial-card.open .trial-body {
+      display: block;
+    }
+
+    /* ─── Grader Results ────────────────────────────────────── */
+    .graders-section {
+      padding: 1rem 1.25rem;
+      background: var(--bg-hover);
+    }
+
+    .grader-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 0.6rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .grader-row:last-child {
+      border-bottom: none;
+    }
+
+    .grader-score {
+      font-weight: 700;
+      font-family: var(--mono);
+      min-width: 3rem;
+    }
+
+    .grader-score.pass {
+      color: var(--green);
+    }
+
+    .grader-score.fail {
+      color: var(--red);
+    }
+
+    .grader-weight {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    .grader-details {
+      flex: 1;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.5;
+    }
+
+    /* ─── Session Log ───────────────────────────────────────── */
+    .log-section {
+      padding: 0 1.25rem 1.25rem;
+    }
+
+    .log-toggle {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.75rem 0;
+      cursor: pointer;
+      border: none;
+      background: none;
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 500;
+      font-family: var(--font);
+      width: 100%;
+    }
+
+    .log-toggle:hover {
+      text-decoration: underline;
+    }
+
+    .log-entries {
+      display: none;
+    }
+
+    .log-entries.open {
+      display: block;
+    }
+
+    .log-entry {
+      border-left: 3px solid var(--border);
+      padding: 0.5rem 0.75rem;
+      margin-bottom: 2px;
+      border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+      transition: background var(--transition);
+    }
+
+    .log-entry:hover {
+      background: var(--bg-hover);
+    }
+
+    .log-entry.agent_start {
+      border-left-color: var(--purple);
+    }
+
+    .log-entry.command,
+    .log-entry.trial_setup,
+    .log-entry.trial_cleanup {
+      border-left-color: var(--blue);
+    }
+
+    .log-entry.agent_result {
+      border-left-color: var(--green);
+    }
+
+    .log-entry.grader {
+      border-left-color: var(--yellow);
+    }
+
+    .log-entry.reward {
+      border-left-color: var(--red);
+    }
+
+    .log-label {
+      display: inline-block;
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      margin-right: 0.5rem;
+      font-family: var(--mono);
+    }
+
+    .agent_start .log-label {
+      background: var(--purple-bg);
+      color: var(--purple);
+    }
+
+    .command .log-label,
+    .trial_setup .log-label,
+    .trial_cleanup .log-label {
+      background: var(--blue-bg);
+      color: var(--blue);
+    }
+
+    .agent_result .log-label {
+      background: var(--green-bg);
+      color: var(--green);
+    }
+
+    .grader .log-label {
+      background: var(--yellow-bg);
+      color: var(--yellow);
+    }
+
+    .reward .log-label {
+      background: var(--red-bg);
+      color: var(--red);
+    }
+
+    .log-ts {
+      font-size: 0.65rem;
+      color: var(--text-muted);
+      font-family: var(--mono);
+    }
+
+    .log-content {
+      margin-top: 0.35rem;
+    }
+
+    pre.code-block {
+      font-family: var(--mono);
+      font-size: 0.8rem;
+      background: var(--bg-code);
+      padding: 0.6rem 0.75rem;
+      border-radius: var(--radius-sm);
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      line-height: 1.5;
+      max-height: 350px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+    }
+
+    .cmd-line {
+      font-family: var(--mono);
+      color: var(--green);
+      font-weight: 500;
+      font-size: 0.85rem;
+    }
+
+    .cmd-line::before {
+      content: '$ ';
+      color: var(--text-muted);
+    }
+
+    .exit-badge {
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      margin-top: 0.25rem;
+    }
+
+    .exit-badge.ok {
+      color: var(--green);
+    }
+
+    .exit-badge.err {
+      color: var(--red);
+    }
+
+    .stderr-text {
+      color: var(--red);
+    }
+
+    .reward-val {
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+
+    .reward-val.pass {
+      color: var(--green);
+    }
+
+    .reward-val.fail {
+      color: var(--red);
+    }
+
+    /* ─── Empty State ───────────────────────────────────────── */
+    .empty {
+      text-align: center;
+      padding: 4rem 2rem;
+      color: var(--text-muted);
+    }
+
+    .empty-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+    }
+
+    /* ─── Loading ───────────────────────────────────────────── */
+    .spinner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4rem;
+      color: var(--text-muted);
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    .spinner::before {
+      content: '';
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+      margin-right: 0.75rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="shell" id="app">
+    <div class="topbar">
+      <h1><span style="color:var(--text)">skill</span><span style="color:var(--text-muted)">grade</span></h1>
+      <button class="theme-btn" onclick="toggleTheme()" id="themeBtn">◐ Dark</button>
+    </div>
+    <div id="content">
+      <div class="spinner">Loading reports…</div>
+    </div>
+  </div>
+
+  <script>
+    // ─── Theme ─────────────────────────────────────────────────
+    function getTheme() { return localStorage.getItem('theme') || (matchMedia('(prefers-color-scheme:dark)').matches ? 'dark' : 'light'); }
+    function applyTheme(t) {
+      document.documentElement.setAttribute('data-theme', t);
+      localStorage.setItem('theme', t);
+      document.getElementById('themeBtn').textContent = t === 'dark' ? '☀ Light' : '◐ Dark';
+    }
+    function toggleTheme() { applyTheme(getTheme() === 'dark' ? 'light' : 'dark'); }
+    applyTheme(getTheme());
+
+    // ─── State ─────────────────────────────────────────────────
+    let reports = [];
+    const $ = id => document.getElementById(id);
+    const esc = s => s ? String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
+
+    // ─── Router ────────────────────────────────────────────────
+    function navigate(view, data) {
+      if (view === 'list') renderList();
+      else if (view === 'detail') loadDetail(data);
+    }
+
+    // ─── List View ─────────────────────────────────────────────
+    async function renderList() {
+      const res = await fetch('/api/reports');
+      reports = await res.json();
+
+      if (!reports.length) {
+        $('content').innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>No reports found. Run an eval first.</div></div>';
+        return;
+      }
+
+      const rows = reports.map(r => {
+        const pr = (r.pass_rate * 100).toFixed(0);
+        const isPass = r.pass_rate >= 0.5;
+        const rawTs = r.timestamp || r.file.match(/\d{4}-\d{2}-\d{2}T[\d-]+/)?.[0]?.replace(/-(?=\d{2}(?:Z|$))/g, ':') || '';
+        const ts = rawTs ? new Date(rawTs).toLocaleString() : 'unknown';
+        const isPartial = r.status === 'partial';
+
+        return `<div class="report-row" onclick="navigate('detail','${esc(r.file)}')">
+      <div style="flex: 1">
+        <div class="report-task">${esc(r.task)}</div>
+        <div class="report-file">${ts}</div>
+      </div>
+      <div class="report-metric"><div class="val">${pr}%</div><div class="lbl">Pass Rate</div></div>
+      <div class="report-metric"><div class="val">${r.trials?.length || 0}</div><div class="lbl">Trials</div></div>
+      <div class="report-metric"><div class="val">${r.pass_at_k != null ? (r.pass_at_k * 100).toFixed(0) + '%' : '—'}</div><div class="lbl">pass@k</div></div>
+      <div class="report-metric"><div class="val">${r.pass_pow_k != null ? (r.pass_pow_k * 100).toFixed(0) + '%' : '—'}</div><div class="lbl">pass^k</div></div>
+      <div style="display:flex; flex-direction:column; gap:0.4rem; align-items:flex-end; min-width:100px">
+        <span class="badge ${isPartial ? 'badge-yellow' : (isPass ? 'badge-pass' : 'badge-fail')}">${isPartial ? 'PARTIAL' : (isPass ? 'PASS' : 'FAIL')}</span>
+        <button class="delete-btn" onclick="deleteReport(event, '${esc(r.file)}')">🗑 Delete</button>
+      </div>
+    </div>`;
+      }).join('');
+
+      $('content').innerHTML = '<div class="reports-grid">' + rows + '</div>';
+    }
+
+    // ─── Detail View ───────────────────────────────────────────
+    async function loadDetail(file) {
+      $('content').innerHTML = '<div class="spinner">Loading…</div>';
+      const res = await fetch('/api/report?file=' + encodeURIComponent(file));
+      const report = await res.json();
+      renderDetail(report, file);
+    }
+
+    function renderDetail(r, file) {
+      const avgDur = r.trials.reduce((s, t) => s + (t.duration_ms || 0), 0) / r.trials.length;
+      const totalTokens = r.trials.reduce((s, t) => s + (t.input_tokens || 0) + (t.output_tokens || 0), 0);
+      const isPartial = r.status === 'partial';
+
+      const stats = `
+    <div class="stat-pill"><div class="val">${(r.pass_rate * 100).toFixed(1)}%</div><div class="lbl">Pass Rate</div></div>
+    <div class="stat-pill"><div class="val">${r.pass_at_k != null ? (r.pass_at_k * 100).toFixed(1) + '%' : '—'}</div><div class="lbl">pass@k</div></div>
+    <div class="stat-pill"><div class="val">${r.pass_pow_k != null ? (r.pass_pow_k * 100).toFixed(1) + '%' : '—'}</div><div class="lbl">pass^k</div></div>
+    <div class="stat-pill"><div class="val">${(avgDur / 1000).toFixed(1)}s</div><div class="lbl">Avg Duration</div></div>
+    <div class="stat-pill"><div class="val">~${totalTokens}</div><div class="lbl">Total Tokens</div></div>
+    <div class="stat-pill"><div class="val">${r.skills_used?.join(', ') || 'none'}</div><div class="lbl">Skills</div></div>
+  `;
+
+      const trials = r.trials.map((t, i) => renderTrial(t, i)).join('');
+
+      $('content').innerHTML = `
+    <a class="back-link" href="javascript:void(0)" onclick="navigate('list')">← All Reports</a>
+    <div class="detail-top">
+      <div class="detail-header">
+        <h2>${esc(r.task)} ${isPartial ? '<span class="badge badge-yellow">PARTIAL</span>' : ''}</h2>
+        <div class="report-file" style="margin-bottom:1rem">${r.timestamp ? new Date(r.timestamp).toLocaleString() : ''}</div>
+      </div>
+      <button class="btn-danger" onclick="deleteReport(null, '${esc(file)}')">Delete Report</button>
+    </div>
+    <div class="detail-stats" style="margin-bottom:2rem">${stats}</div>
+    ${trials}
+  `;
+    }
+
+    function renderTrial(t, idx) {
+      const isCancelled = t.status === 'cancelled';
+      const pass = t.reward >= 0.5;
+      const dur = ((t.duration_ms || 0) / 1000).toFixed(1);
+      const tokens = (t.input_tokens || 0) + (t.output_tokens || 0);
+
+      const graders = (t.grader_results || []).map(g => `
+    <div class="grader-row">
+      <span class="badge badge-type">${esc(g.grader_type)}</span>
+      <span class="grader-score ${g.score >= 0.5 ? 'pass' : 'fail'}">${g.score.toFixed(2)}</span>
+      <span class="grader-weight">×${g.weight}</span>
+      <div class="grader-details">${esc(g.details)}</div>
+    </div>
+  `).join('');
+
+      const logId = 'log-' + idx;
+      const logs = (t.session_log || []).map(e => renderLogEntry(e)).join('');
+
+      let statusBadge = `<span class="badge ${pass ? 'badge-pass' : 'badge-fail'}">${pass ? 'PASS' : 'FAIL'}</span>`;
+      if (isCancelled) {
+        statusBadge = `<span class="badge badge-yellow">CANCELLED</span>`;
+      }
+
+      return `
+    <div class="trial-card" id="trial-${idx}">
+      <div class="trial-header" onclick="toggleTrial(${idx})">
+        <span class="trial-number">Trial ${t.trial_id}</span>
+        <span class="trial-reward ${isCancelled ? '' : (pass ? 'pass' : 'fail')}">${isCancelled ? '—' : t.reward.toFixed(2)}</span>
+        ${statusBadge}
+        <span class="trial-meta">
+          <span>${dur}s</span>
+          <span>${t.n_commands || 0} cmds</span>
+          <span>~${tokens} tokens</span>
+        </span>
+        <span class="trial-chevron">▶</span>
+      </div>
+      <div class="trial-body">
+        ${graders ? '<div class="graders-section">' + graders + '</div>' : ''}
+        <div class="log-section">
+          ${isCancelled ? '<div style="padding:1rem; color:var(--text-muted)">Trial was cancelled.</div>' : `
+          <button class="log-toggle" onclick="toggleLog('${logId}')">▶ Session Log (${t.session_log?.length || 0} entries)</button>
+          <div class="log-entries" id="${logId}">${logs}</div>
+          `}
+        </div>
+      </div>
+    </div>
+  `;
+    }
+
+    function renderLogEntry(e) {
+      let body = '';
+      switch (e.type) {
+        case 'agent_start':
+          body = '<pre class="code-block">' + esc(e.instruction || '') + '</pre>';
+          break;
+        case 'command':
+        case 'trial_setup':
+        case 'trial_cleanup':
+          body = '<div class="cmd-line">' + esc(e.command || '') + '</div>'
+            + '<pre class="code-block">' + esc(e.stdout || '')
+            + (e.stderr ? '<span class="stderr-text">' + esc(e.stderr) + '</span>' : '')
+            + '</pre>'
+            + '<div class="exit-badge ' + (e.exitCode === 0 ? 'ok' : 'err') + '">exit ' + (e.exitCode ?? '?') + '</div>';
+          break;
+        case 'agent_result':
+          body = '<pre class="code-block">' + esc(e.output || '') + '</pre>';
+          break;
+        case 'grader':
+          if (e.grader_result) {
+            const g = e.grader_result;
+            body = '<span class="grader-score ' + (g.score >= 0.5 ? 'pass' : 'fail') + '">'
+              + g.score.toFixed(2) + '</span> '
+              + '<span class="badge badge-type">' + esc(g.grader_type) + '</span> '
+              + '<span class="grader-details">' + esc(g.details) + '</span>';
+          }
+          break;
+        case 'reward':
+          body = '<span class="reward-val ' + ((e.value || 0) >= 0.5 ? 'pass' : 'fail') + '">'
+            + (e.value?.toFixed(2) || '0.00') + '</span>'
+            + (e.output ? '<div class="grader-details" style="margin-top:0.25rem">' + esc(e.output) + '</div>' : '');
+          break;
+      }
+      return '<div class="log-entry ' + e.type + '">'
+        + '<span class="log-label">' + e.type + '</span>'
+        + '<span class="log-ts">' + (e.timestamp || '') + '</span>'
+        + '<div class="log-content">' + body + '</div>'
+        + '</div>';
+    }
+
+    // ─── Interactions ──────────────────────────────────────────
+    function toggleTrial(idx) {
+      document.getElementById('trial-' + idx).classList.toggle('open');
+    }
+    function toggleLog(id) {
+      document.getElementById(id).classList.toggle('open');
+    }
+
+    async function deleteReport(event, file) {
+      if (event) event.stopPropagation();
+      if (!confirm('Are you sure you want to delete this report?')) return;
+
+      const res = await fetch('/api/report?file=' + encodeURIComponent(file), { method: 'DELETE' });
+      if (res.ok) {
+        if (event) renderList();
+        else navigate('list');
+      } else {
+        alert('Failed to delete report');
+      }
+    }
+
+    // ─── Init ──────────────────────────────────────────────────
+    navigate('list');
+  </script>
+</body>
+
+</html>
