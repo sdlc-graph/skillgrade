@@ -1,4 +1,4 @@
-import { ExpectedTool } from '../types';
+import { ExpectedTool, EarlyStopConfig } from '../types';
 
 /**
  * Eval configuration types.
@@ -55,6 +55,7 @@ export interface EvalTaskConfig {
     solution?: string;      // path to reference solution script
     trialConfig?: TrialConfig;
     env?: Record<string, string>;
+    early_stop?: EarlyStopConfig;
 
     // Per-task overrides
     agent?: string;
@@ -107,6 +108,7 @@ export interface ResolvedTask {
     environment: EnvironmentConfig;
     env?: Record<string, string>;
     agentWorkingDir?: string;
+    early_stop?: EarlyStopConfig;
 }
 
 export interface ResolvedGrader {

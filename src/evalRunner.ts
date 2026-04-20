@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import {
     BaseAgent, EnvironmentProvider,
-    LogEntry, TrialResult, EvalReport, GraderResult, WorkspaceMapping
+    LogEntry, TrialResult, EvalReport, GraderResult, EarlyStopConfig, WorkspaceMapping
 } from './types';
 import { ResolvedGrader, TrialConfig } from './core/config.types';
 import { getGrader } from './graders';
@@ -64,6 +64,7 @@ export interface EvalRunOptions {
     };
     agentWorkingDir?: string;
     noSkills?: boolean;
+    earlyStop?: EarlyStopConfig;
     workspace?: WorkspaceMapping[];
 }
 
@@ -274,8 +275,8 @@ export class EvalRunner {
 
             spinner.update('running agent');
             const abortController = new AbortController();
-            const loggedRunCommand = async (cmd: string, cmdOpts?: { signal?: AbortSignal }) => {
-                const result = await this.provider.runCommand(workspace!, cmd, trialEnv, { signal: cmdOpts?.signal });
+            const loggedRunCommand = async (cmd: string, cmdOpts?: { signal?: AbortSignal; earlyStop?: EarlyStopConfig }) => {
+                const result = await this.provider.runCommand(workspace!, cmd, trialEnv, { signal: cmdOpts?.signal, earlyStop: cmdOpts?.earlyStop });
                 commandCount++;
                 sessionLog.push({
                     type: 'command',
@@ -301,7 +302,7 @@ export class EvalRunner {
                     : opts.agentWorkingDir;
 
                 agentLogs = await withTimeout(
-                    agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir, signal: abortController.signal }),
+                    agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir: opts.agentWorkingDir, signal: abortController.signal, earlyStop: opts.earlyStop }),
                     agentTimeoutMs + 5000, // Grace period to allow agent.run to resolve with partial logs
                     `Agent (limit: ${opts.timeoutSec}s)`
                 );

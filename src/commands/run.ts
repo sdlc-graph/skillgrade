@@ -146,6 +146,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
                 env: resolved.trialConfig?.env,
             },
             agentWorkingDir: resolved.agentWorkingDir,
+            earlyStop: resolved.early_stop,
             workspace: resolved.workspace,
         };
 
