@@ -136,36 +136,25 @@ export class LLMGrader implements Grader {
 
         const transcript = sections.join('\n\n');
 
-        let prompt = `You are an evaluation judge. Score the following agent session on a scale from 0.0 to 1.0 based on the rubric below.
+        const prompt = `You are an evaluation judge. Score the following agent session ${questions.length > 0 
+            ? 'based on the rubric below.\nFor each question in the rubric, provide a score between 0.0 and 1.0 and a brief explanation.' 
+            : 'on a scale from 0.0 to 1.0 based on the rubric below.'}
 
 IMPORTANT CONTEXT: The agent runs inside a CLI wrapper (e.g., Gemini CLI). The agent's tool calls (file edits, shell commands) appear as text in the "Agent Output" section. This is a real execution trace, not hallucination. The "Prior Grader Results" section shows objective automated test results that verify the actual filesystem state after the agent ran.
 
 ## Rubric
-${rubricContent}
+${questions.length > 0 ? questions.map((q, i) => `${i+1}. ${q}`).join('\n') : rubricContent}
 
 ## Session Transcript
 ${transcript}
 
-Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explanation>"}`;
-
-        if (questions.length > 0) {
-            prompt = `You are an evaluation judge. Score the following agent session based on the rubric below.
-For each question in the rubric, provide a score between 0.0 and 1.0 and a brief explanation.
-
-IMPORTANT CONTEXT: The agent runs inside a CLI wrapper (e.g., Gemini CLI). The agent's tool calls (file edits, shell commands) appear as text in the "Agent Output" section. This is a real execution trace, not hallucination. The "Prior Grader Results" section shows objective automated test results that verify the actual filesystem state after the agent ran.
-
-## Rubric
-${questions.map((q, i) => `${i+1}. ${q}`).join('\n')}
-
-## Session Transcript
-${transcript}
-
-Respond with ONLY a JSON object where the keys are the EXACT questions listed above:
+${questions.length > 0 
+    ? `Respond with ONLY a JSON object where the keys are the EXACT questions listed above:
 {
   "Question 1 text": {"score": <number>, "reasoning": "<explanation>"},
   "Question 2 text": ...
-}`;
-        }
+}` 
+    : 'Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explanation>"}'}`;
 
         // Try Gemini API first, fall back to Anthropic
         const apiKey = env?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
