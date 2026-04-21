@@ -87,8 +87,12 @@ export class ToolUsageGrader implements Grader {
             }
         }
 
+        const calledCount = expectedTools.length - missingTools.length;
+        const score = calledCount / expectedTools.length;
+        const expectedStrs = expectedTools.map(t => `${t.name}${t.args ? `(${JSON.stringify(t.args)})` : ''}`);
+        const calledStrs = calledTools.map(t => `${t.name}(${JSON.stringify(t.args)})`);
+        
         if (missingTools.length === 0) {
-            const expectedStrs = expectedTools.map(t => `${t.name}${t.args ? `(${JSON.stringify(t.args)})` : ''}`);
             return {
                 grader_type: 'tool_usage',
                 score: 1.0,
@@ -96,10 +100,9 @@ export class ToolUsageGrader implements Grader {
                 details: `All expected tools were called: ${expectedStrs.join(', ')}`
             };
         } else {
-            const calledStrs = calledTools.map(t => `${t.name}(${JSON.stringify(t.args)})`);
             return {
                 grader_type: 'tool_usage',
-                score: 0.0,
+                score,
                 weight: config.weight,
                 details: `Missing expected tools: ${missingTools.join(', ')}. Called tools: ${calledStrs.join(', ')}`
             };

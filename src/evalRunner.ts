@@ -275,43 +275,59 @@ export class EvalRunner {
             spinner.update('running agent');
             const abortController = new AbortController();
             const loggedRunCommand = async (cmd: string, cmdOpts?: { signal?: AbortSignal }) => {
-                const result = await this.provider.runCommand(workspace!, cmd, trialEnv, { signal: cmdOpts?.signal });
-                commandCount++;
-                sessionLog.push({
+                const timestamp = this.timestamp();
+                const entry: LogEntry = {
                     type: 'command',
-                    timestamp: this.timestamp(),
+                    timestamp: timestamp,
                     command: cmd,
-                    stdout: result.stdout,
-                    stderr: result.stderr,
-                    exitCode: result.exitCode
-                });
-                return result;
+                    stdout: '',
+                    stderr: '',
+                    exitCode: 0
+                };
+                sessionLog.push(entry);
+
+                try {
+                    const result = await this.provider.runCommand(workspace!, cmd, trialEnv, { signal: cmdOpts?.signal });
+                    commandCount++;
+                    entry.stdout = result.stdout;
+                    entry.stderr = result.stderr;
+                    entry.exitCode = result.exitCode;
+                    return result;
+                } catch (e: any) {
+                    entry.stderr = `Error: ${e.message || e}`;
+                    entry.exitCode = 1;
+                    throw e;
+                }
             };
 
             const agentTimeoutMs = opts.timeoutSec * 1000;
-            let agentLogs: string;
-            
+
+            // Resolve working directory
+            const agentWorkingDir = (opts.agentWorkingDir && this.provider.resolveWorkspacePath)
+                ? this.provider.resolveWorkspacePath(opts.agentWorkingDir, workspace)
+                : opts.agentWorkingDir;
+
             const abortTimer = setTimeout(() => {
                 abortController.abort();
             }, agentTimeoutMs);
 
+            let agentLogs: string;
             try {
-                const agentWorkingDir = (opts.agentWorkingDir && this.provider.resolveWorkspacePath)
-                    ? this.provider.resolveWorkspacePath(opts.agentWorkingDir, workspace)
-                    : opts.agentWorkingDir;
-
+                // Use withTimeout as a safety net with a 5-second grace period after abort signal
                 agentLogs = await withTimeout(
                     agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir, signal: abortController.signal }),
-                    agentTimeoutMs + 5000, // Grace period to allow agent.run to resolve with partial logs
+                    agentTimeoutMs + 5000,
                     `Agent (limit: ${opts.timeoutSec}s)`
                 );
             } catch (err: any) {
-                if (err.message && err.message.includes('timed out')) {
-                    console.error(`[Failed to abort after timeout: ${err.message}]`);
-                    throw err;
-                } else {
-                    throw err;
-                }
+                // Log agent_result on failure to ensure it exists in session_log
+                sessionLog.push({
+                    type: 'agent_result',
+                    timestamp: this.timestamp(),
+                    output: `Agent execution failed or timed out. Error: ${err.message || err}`
+                });
+
+                throw err;
             } finally {
                 clearTimeout(abortTimer);
             }
