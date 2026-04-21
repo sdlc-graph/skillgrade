@@ -17,13 +17,14 @@ describe('GeminiAgent', () => {
     });
 
     const result = await agent.run('Test instruction', '/workspace', mockRunCommand);
-
-    expect(commands).toHaveLength(2);
+ 
+    expect(commands).toHaveLength(3);
     expect(commands[0]).toContain('base64');
-    expect(commands[0]).toContain('/tmp/.prompt.md');
+    expect(commands[0]).toContain('/tmp/.prompt');
     expect(commands[1]).toContain('gemini');
     expect(commands[1]).toContain('-y');
     expect(commands[1]).toContain('--sandbox=none');
+    expect(commands[2]).toContain('rm');
     expect(result).toContain('output');
   });
 
@@ -73,8 +74,8 @@ describe('GeminiAgent', () => {
     });
 
     await agent.run('Test instruction', '/workspace', mockRunCommand, { agentWorkingDir: 'sub-dir' });
-
-    expect(commands).toHaveLength(2);
+ 
+    expect(commands).toHaveLength(3);
     expect(commands[1]).toContain('cd sub-dir && gemini');
   });
 });
@@ -90,12 +91,13 @@ describe('ClaudeAgent', () => {
 
     const result = await agent.run('Test instruction', '/workspace', mockRunCommand);
 
-    expect(commands).toHaveLength(2);
+    expect(commands).toHaveLength(3);
     expect(commands[0]).toContain('base64');
-    expect(commands[0]).toContain('/tmp/.prompt.md');
+    expect(commands[0]).toContain('/tmp/.prompt');
     expect(commands[1]).toContain('claude');
     expect(commands[1]).toContain('-p');
     expect(commands[1]).toContain('--dangerously-skip-permissions');
+    expect(commands[2]).toContain('rm');
     expect(result).toContain('output');
   });
 

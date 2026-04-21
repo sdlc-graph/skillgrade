@@ -196,6 +196,7 @@ function validateConfig(raw: any): EvalConfig {
                     setup: g.setup,
                     run: g.run,
                     rubric: g.rubric,
+                    outcome_assertions: g.outcome_assertions,
                     model: g.model,
                     weight: g.weight ?? 1.0,
                     expectedTools: g.expectedTools,
@@ -270,8 +271,15 @@ export async function resolveTask(
             if (g.type === 'deterministic' && g.run) {
                 resolved.run = await resolveFileOrInline(g.run, baseDir);
             }
-            if (g.type === 'llm_rubric' && g.rubric) {
-                resolved.rubric = await resolveFileOrInline(g.rubric, baseDir);
+            if (g.type === 'llm_rubric') {
+                if (g.outcome_assertions) {
+                    // Support string arrays for outcome assertions
+                    resolved.outcome_assertions = Array.isArray(g.outcome_assertions)
+                        ? g.outcome_assertions.map((q: any) => String(q))
+                        : [String(g.outcome_assertions)];
+                } else if (g.rubric) {
+                    resolved.rubric = await resolveFileOrInline(g.rubric, baseDir);
+                }
             }
             return resolved;
         })

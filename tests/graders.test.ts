@@ -174,6 +174,37 @@ describe('LLMGrader', () => {
     expect(result.details).toContain('prompts/quality.md');
   });
 
+  it('uses outcome_assertions when provided', async () => {
+    const originalFetch = globalThis.fetch;
+    let capturedBody: any;
+    globalThis.fetch = vi.fn().mockImplementation(async (_url: string, opts: any) => {
+      capturedBody = JSON.parse(opts.body);
+      return {
+        ok: true,
+        json: () => Promise.resolve({
+          candidates: [{ content: { parts: [{ text: '{"Is the sky blue?": {"score": 1.0, "reasoning": "Yes"}}' }] } }],
+        }),
+      };
+    });
+
+    const provider = makeProvider('');
+    const config: GraderConfig = { 
+      type: 'llm_rubric', 
+      outcome_assertions: ['Is the sky blue?'], 
+      weight: 1.0 
+    };
+    const env = { GEMINI_API_KEY: 'test-key' };
+    const result = await grader.grade('/workspace', provider, config, '/task', [], env);
+
+    expect(result.score).toBe(1.0);
+    expect(result.details).toContain('✓ Is the sky blue?');
+    
+    const prompt = capturedBody.contents[0].parts[0].text;
+    expect(prompt).toContain('Is the sky blue?');
+
+    globalThis.fetch = originalFetch;
+  });
+
   describe('parseResponse (via grade)', () => {
     // Test parseResponse indirectly through callGemini
     // We mock fetch to control API responses

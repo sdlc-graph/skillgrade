@@ -367,9 +367,10 @@ export class EvalRunner {
                     command: graderDef.type === 'deterministic'
                         ? `bash .skillgrade/tests/${detIndex === 0 ? 'test.sh' : `test_${detIndex}.sh`}`
                         : undefined,
-                    rubric: graderDef.type === 'llm_rubric'
+                    rubric: graderDef.type === 'llm_rubric' && graderDef.rubric
                         ? `.skillgrade/prompts/${llmIndex === 0 ? 'quality.md' : `quality_${llmIndex}.md`}`
                         : undefined,
+                    outcome_assertions: graderDef.outcome_assertions,
                     model: graderDef.model || opts.graderModel,
                     weight: graderDef.weight,
                     expectedTools: graderDef.expectedTools,
