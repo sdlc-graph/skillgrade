@@ -21,7 +21,7 @@ export interface EvalGraderConfig {
     setup?: string;     // commands to install grader dependencies (runs during image build)
     run?: string;       // inline script or file path (deterministic)
     rubric?: string;    // inline rubric or file path (llm_rubric)
-    outcome_assertions?: string[] | any[]; // inline assertions or questions
+    outcome_assertions?: string[]; // list of yes/no assertions
     model?: string;     // LLM model override (e.g. 'gemini-2.0-flash', 'claude-sonnet-4-20250514')
     weight: number;
     expectedTools?: ExpectedTool[]; // for tool_usage: list of expected tool calls

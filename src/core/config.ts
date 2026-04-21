@@ -273,9 +273,9 @@ export async function resolveTask(
             }
             if (g.type === 'llm_rubric') {
                 if (g.outcome_assertions) {
-                    // Support both shorthand string arrays and object arrays with 'question' key
+                    // Support string arrays for outcome assertions
                     resolved.outcome_assertions = Array.isArray(g.outcome_assertions)
-                        ? g.outcome_assertions.map((q: any) => typeof q === 'string' ? q : (q.question || JSON.stringify(q)))
+                        ? g.outcome_assertions.map((q: any) => String(q))
                         : [String(g.outcome_assertions)];
                 } else if (g.rubric) {
                     resolved.rubric = await resolveFileOrInline(g.rubric, baseDir);

@@ -266,25 +266,15 @@ echo "{\"score\":$score,\"details\":\"$passed/$total passed\",\"checks\":[{\"nam
 Evaluates the agent's session transcript against qualitative criteria.
 
 **Outcome Assertions Format (Recommended)**
-Evaluates binary yes/no assertions. Ensures the model scores each question exactly once and returns the average score.
+Evaluates binary yes/no assertions. Ensures the model scores each assertion exactly once and returns the average score.
 
 ```yaml
 - type: llm_rubric
   outcome_assertions:
-    - question: Did the agent follow the mandatory 3-step workflow?
-    - question: Did it complete in ≤5 commands?
+    - Did the agent follow the mandatory 3-step workflow?
+    - Did it complete in ≤5 commands?
   weight: 0.3
   model: gemini-2.0-flash    # optional
-```
-
-You can also use the shorthand string array format:
-
-```yaml
-- type: llm_rubric
-  outcome_assertions:
-    - "Did the agent follow the mandatory 3-step workflow?"
-    - "Did it complete in ≤5 commands?"
-  weight: 0.3
 ```
 
 **Rubric Format (Free-text)**
