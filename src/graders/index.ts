@@ -316,7 +316,10 @@ Respond with ONLY a JSON object where the keys are the EXACT questions listed ab
         }
     }
 
-    // we'll no longer use this one to convert data to json
+    /**
+     * @deprecated This function is a duplicate of the logic in callGemini.
+     * We will eventually migrate off this approach entirely.
+     */
     private parseResponse(text: string, config: GraderConfig): GraderResult {
         try {
             // Strip markdown code fences if present
