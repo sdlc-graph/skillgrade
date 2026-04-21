@@ -20,7 +20,8 @@ export interface EvalGraderConfig {
     type: 'deterministic' | 'llm_rubric' | 'tool_usage';
     setup?: string;     // commands to install grader dependencies (runs during image build)
     run?: string;       // inline script or file path (deterministic)
-    rubric?: string | any[]; // inline rubric, file path, or list of questions
+    rubric?: string;    // inline rubric or file path (llm_rubric)
+    outcome_assertions?: string[] | any[]; // inline assertions or questions
     model?: string;     // LLM model override (e.g. 'gemini-2.0-flash', 'claude-sonnet-4-20250514')
     weight: number;
     expectedTools?: ExpectedTool[]; // for tool_usage: list of expected tool calls
@@ -114,6 +115,7 @@ export interface ResolvedGrader {
     setup?: string;     // resolved setup commands
     run?: string;       // resolved content for deterministic
     rubric?: string;    // resolved content for llm_rubric
+    outcome_assertions?: string[]; // resolved outcome assertions
     model?: string;     // LLM model override
     weight: number;
     expectedTools?: ExpectedTool[]; // for tool_usage: list of expected tool calls

@@ -196,6 +196,7 @@ function validateConfig(raw: any): EvalConfig {
                     setup: g.setup,
                     run: g.run,
                     rubric: g.rubric,
+                    outcome_assertions: g.outcome_assertions,
                     model: g.model,
                     weight: g.weight ?? 1.0,
                     expectedTools: g.expectedTools,
@@ -270,10 +271,13 @@ export async function resolveTask(
             if (g.type === 'deterministic' && g.run) {
                 resolved.run = await resolveFileOrInline(g.run, baseDir);
             }
-            if (g.type === 'llm_rubric' && g.rubric) {
-                if (Array.isArray(g.rubric)) {
-                    resolved.rubric = JSON.stringify(g.rubric);
-                } else {
+            if (g.type === 'llm_rubric') {
+                if (g.outcome_assertions) {
+                    // Support both shorthand string arrays and object arrays with 'question' key
+                    resolved.outcome_assertions = Array.isArray(g.outcome_assertions)
+                        ? g.outcome_assertions.map((q: any) => typeof q === 'string' ? q : (q.question || JSON.stringify(q)))
+                        : [String(g.outcome_assertions)];
+                } else if (g.rubric) {
                     resolved.rubric = await resolveFileOrInline(g.rubric, baseDir);
                 }
             }

@@ -92,25 +92,20 @@ export class LLMGrader implements Grader {
         sessionLog: any[],
         env?: Record<string, string>
     ): Promise<GraderResult> {
-        const rubricPath = path.join(taskPath, config.rubric || 'prompts/quality.md');
-        if (!await fs.pathExists(rubricPath)) {
-            return {
-                grader_type: 'llm_rubric',
-                score: 0,
-                weight: config.weight,
-                details: `Rubric file not found: ${rubricPath}`
-            };
-        }
+        let questions: string[] = config.outcome_assertions || [];
+        let rubricContent = '';
 
-        const rubricContent = await fs.readFile(rubricPath, 'utf-8');
-        let questions: string[] = [];
-        try {
-            const parsed = JSON.parse(rubricContent);
-            if (Array.isArray(parsed)) {
-                questions = parsed.map((q: any) => q.question || q);
+        if (questions.length === 0) {
+            const rubricPath = path.join(taskPath, config.rubric || 'prompts/quality.md');
+            if (!await fs.pathExists(rubricPath)) {
+                return {
+                    grader_type: 'llm_rubric',
+                    score: 0,
+                    weight: config.weight,
+                    details: `Rubric file not found: ${rubricPath}`
+                };
             }
-        } catch (e) {
-            // Ignore
+            rubricContent = await fs.readFile(rubricPath, 'utf-8');
         }
 
         // Build a comprehensive transcript for the LLM
@@ -331,6 +326,29 @@ Respond with ONLY a JSON object where the keys are the EXACT questions listed ab
             const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
+                
+                const questions = config.outcome_assertions || [];
+                if (questions.length > 0) {
+                    const scores: number[] = [];
+                    const detailsLines: string[] = [];
+                    for (const q of questions) {
+                        const evalItem = parsed[q];
+                        if (evalItem) {
+                            scores.push(evalItem.score);
+                            detailsLines.push(`  ${evalItem.score >= 0.5 ? '✓' : '✗'} ${q}: ${evalItem.reasoning}`);
+                        }
+                    }
+                    if (scores.length > 0) {
+                        const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
+                        return {
+                            grader_type: 'llm_rubric',
+                            score: avgScore,
+                            weight: config.weight,
+                            details: detailsLines.join('\n')
+                        };
+                    }
+                }
+
                 if (parsed.evaluations) {
                     const scores = parsed.evaluations.map((e: any) => e.score);
                     const avgScore = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
