@@ -223,10 +223,12 @@ export async function runEvals(dir: string, opts: RunOptions) {
                 const report = await runner.runEval(agent, tmpTaskDir, skillsPaths, evalOpts, trials, mergedEnv, parallel, opts.noSkills);
                 reports.push(report);
 
-                // LLM grader reasoning (condensed)
+                // Grader reasoning for failures or partial passes
                 for (const trial of report.trials) {
-                    for (const g of trial.grader_results.filter(g => g.grader_type === 'llm_rubric')) {
-                        console.log(`    ${fmt.dim(`trial ${trial.trial_id} llm_rubric:`)} ${g.details.substring(0, 120)}`);
+                    for (const g of trial.grader_results) {
+                        if (g.score < 1.0) {
+                            console.log(`    ${fmt.dim(`trial ${trial.trial_id} ${g.grader_type}:`)} ${g.details}`);
+                        }
                     }
                 }
 

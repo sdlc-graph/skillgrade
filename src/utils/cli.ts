@@ -120,6 +120,7 @@ export class Spinner {
     }
 
     render() {
+        if (!this.interval) return;
         const frame = this.frames[this.frameIdx % this.frames.length];
         this.frameIdx++;
         const elapsed = ((Date.now() - this.startTime) / 1000).toFixed(0);
