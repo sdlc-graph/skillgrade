@@ -160,6 +160,11 @@ export class DockerProvider implements EnvironmentProvider {
         }
     }
 
+    async getWorkspaceArchive(containerId: string): Promise<NodeJS.ReadableStream> {
+        const container = this.docker.getContainer(containerId);
+        return container.getArchive({ path: '/workspace/.' });
+    }
+
     /**
      * One-time teardown: remove the prepared image after all trials.
      */

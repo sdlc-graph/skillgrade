@@ -74,6 +74,7 @@ Reports are saved to `$TMPDIR/skillgrade/<skill-name>/results/`. Override with `
 | `--threshold=0.8` | Pass rate threshold for CI mode |
 | `--preview` | Show CLI results after running |
 | `--no-skills` | Run without any agent skills (for baseline testing) |
+| `--save-trial-workspace` | Save trial workspace as archive in output directory |
 
 ## Parallelism & Multiple API Keys
 
@@ -421,6 +422,33 @@ All environment variables (including those from `.env` and `eval.yaml`) are **re
 - **Instructions must name output files.** If the grader checks for `output.html`, the instruction must tell the agent to save as `output.html`.
 - **Validate graders first.** Use `--validate` with a reference solution before running real evals.
 - **Start small.** 3–5 well-designed tasks beat 50 noisy ones.
+
+## Debugging Failed Trials
+
+If you use the `--save-trial-workspace` flag, SkillGrade will save the workspace of each trial as a tar archive in the `workspaces/` directory within your output directory.
+
+You can use this archive to debug failed trials by extracting it and mounting it into a new container.
+
+**Example (Docker):**
+
+1. Extract the archive:
+   ```bash
+   mkdir workspace
+   tar -xf path/to/output/workspaces/trial_1.tar -C workspace
+   ```
+
+2. Run a new container with the workspace mounted:
+   ```bash
+   docker run -it -v $(pwd)/workspace:/workspace node:20-slim bash
+   ```
+
+> [!WARNING]
+> The agent (e.g., Gemini CLI, Claude Code) might not be installed in the new container unless it was baked into the base image or you install it manually.
+
+> [!WARNING]
+> Any files mounted or created outside the `/workspace` directory (e.g., in `/tmp` or system directories) will not be included in the archive.
+
+If you are using the `local` provider, the workspace is just a local directory that was deleted, but the archive allows you to restore state and inspect files.
 
 For a comprehensive guide on writing high-quality skills, check out [skills-best-practices](https://github.com/mgechev/skills-best-practices/). You can also install the skill creator skill to help author skills:
 

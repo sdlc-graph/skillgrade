@@ -32,6 +32,7 @@ interface RunOptions {
     grader?: string;     // filter graders by type (deterministic|llm_rubric)
     noRedact?: boolean;
     noSkills?: boolean;
+    saveTrialWorkspace?: boolean;
 }
 
 async function loadEnvFile(filePath: string): Promise<Record<string, string>> {
@@ -99,13 +100,16 @@ export async function runEvals(dir: string, opts: RunOptions) {
     const skillName = path.basename(dir);
     let outputDir: string;
     let resultsDir: string;
+    let workspacesDir: string;
 
     if (outputBase.startsWith('gs://')) {
         outputDir = outputBase.endsWith('/') ? `${outputBase}${skillName}` : `${outputBase}/${skillName}`;
         resultsDir = `${outputDir}/results`;
+        workspacesDir = `${outputDir}/workspaces`;
     } else {
         outputDir = path.join(outputBase, skillName);
         resultsDir = path.join(outputDir, 'results');
+        workspacesDir = path.join(outputDir, 'workspaces');
         await fs.ensureDir(resultsDir);
     }
     kv('output', outputDir);
@@ -147,6 +151,8 @@ export async function runEvals(dir: string, opts: RunOptions) {
             },
             agentWorkingDir: resolved.agentWorkingDir,
             workspace: resolved.workspace,
+            saveTrialWorkspace: opts.saveTrialWorkspace,
+            workspacesDir: workspacesDir,
         };
 
         // Pick agent: CLI flag > task-level override > auto-detect from API key > default

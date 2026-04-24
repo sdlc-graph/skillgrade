@@ -100,6 +100,8 @@ export interface EnvironmentProvider {
     setup(taskPath: string, skillsPaths: string[], opts: EnvironmentSetupOpts, env?: Record<string, string>): Promise<string>;
     /** Per-trial cleanup. */
     cleanup(workspacePath: string): Promise<void>;
+    /** Get workspace archive stream. */
+    getWorkspaceArchive?(workspacePath: string): Promise<NodeJS.ReadableStream>;
     /** One-time teardown. */
     teardown?(): Promise<void>;
     runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult>;

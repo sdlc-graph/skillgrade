@@ -105,6 +105,7 @@ async function main() {
         output: outputDir,
         noRedact: hasFlag('no-redact'),
         noSkills: hasFlag('no-skills'),
+        saveTrialWorkspace: hasFlag('save-trial-workspace'),
     });
 
     if (openPreview) {
@@ -143,6 +144,7 @@ function printHelp() {
     --preview          Open CLI results after running
     --no-redact        Disable redaction of environment variables in reports
     --no-skills        Run without any agent skills (for baseline testing)
+    --save-trial-workspace Save trial workspace as archive in output directory
 
   Examples:
     skillgrade init                # scaffold eval.yaml
