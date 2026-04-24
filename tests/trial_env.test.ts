@@ -142,7 +142,7 @@ describe('Trial Environment Substitution', () => {
     // Check that UUID is the same for both trials
     expect(calledEnvs[0]._EVAL_UUID).toBe(calledEnvs[1]._EVAL_UUID);
     
-    // Check that UUID is a valid UUID
-    expect(calledEnvs[0]._EVAL_UUID).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    // Check that UUID is a valid short UUID (8 characters)
+    expect(calledEnvs[0]._EVAL_UUID).toMatch(/^[0-9a-f]{8}$/);
   });
 });

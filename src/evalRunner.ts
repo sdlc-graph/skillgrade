@@ -65,6 +65,8 @@ export interface EvalRunOptions {
     agentWorkingDir?: string;
     noSkills?: boolean;
     workspace?: WorkspaceMapping[];
+    saveTrialWorkspace?: boolean;
+    workspacesDir?: string;
 }
 
 export class EvalRunner {
@@ -100,7 +102,9 @@ export class EvalRunner {
         const taskName = path.basename(taskPath);
         opts.noSkills = noSkills;
         const startTime = this.timestamp();
-        const evalUuid = crypto.randomUUID();
+        const evalUuid = crypto.randomUUID().substring(0, 8);
+        const filenameTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const runId = `${taskName}_${filenameTimestamp}_${evalUuid}`;
         console.log(`\n${fmt.bold('Eval UUID:')} ${evalUuid}`);
 
         // One-time image build (if provider supports it)
@@ -119,11 +123,11 @@ export class EvalRunner {
 
         try {
             if (parallel > 1 && numTrials > 1) {
-                trials = await this.runTrialsParallel(agent, taskPath, skillsPaths, opts, numTrials, parallel, evalUuid, env);
+                trials = await this.runTrialsParallel(agent, taskPath, skillsPaths, opts, numTrials, parallel, evalUuid, runId, env);
             } else {
                 for (let i = 0; i < numTrials; i++) {
                     if (this.isCancelled) break;
-                    const result = await this.runSingleTrial(agent, taskPath, skillsPaths, opts, i, numTrials, evalUuid, env);
+                    const result = await this.runSingleTrial(agent, taskPath, skillsPaths, opts, i, numTrials, evalUuid, runId, env);
                     trials.push(result);
                 }
             }
@@ -167,7 +171,7 @@ export class EvalRunner {
 
         if (this.logDir) {
             const sanitized = this.noRedact ? report : this.sanitize(report, env);
-            await this.saveReport(sanitized);
+            await this.saveReport(sanitized, runId);
         }
 
         return report;
@@ -181,6 +185,7 @@ export class EvalRunner {
         numTrials: number,
         parallel: number,
         evalUuid: string,
+        runId: string,
         env?: Record<string, string>
     ): Promise<TrialResult[]> {
         const results: TrialResult[] = [];
@@ -189,7 +194,7 @@ export class EvalRunner {
         const workers = Array.from({ length: Math.min(parallel, numTrials) }, async () => {
             while (queue.length > 0 && !this.isCancelled) {
                 const i = queue.shift()!;
-                const result = await this.runSingleTrial(agent, taskPath, skillsPaths, opts, i, numTrials, evalUuid, env);
+                const result = await this.runSingleTrial(agent, taskPath, skillsPaths, opts, i, numTrials, evalUuid, runId, env);
                 results.push(result);
             }
         });
@@ -206,6 +211,7 @@ export class EvalRunner {
         index: number,
         total: number,
         evalUuid: string,
+        runId: string,
         env?: Record<string, string>
     ): Promise<TrialResult> {
         const sessionLog: LogEntry[] = [];
@@ -487,6 +493,41 @@ export class EvalRunner {
                         console.error(`Error running per-trial cleanup: ${e}`);
                     }
                 }
+                if (opts.saveTrialWorkspace && this.provider.getWorkspaceArchive) {
+                    const saveSpinner = new Spinner(`${index + 1}/${total}`, 'saving workspace');
+                    try {
+                        const archiveStream = await this.provider.getWorkspaceArchive(workspace);
+                        const filename = `trial_${trialId}.tar`;
+                        
+                        const baseDir = opts.workspacesDir || this.logDir;
+                        
+                        if (baseDir) {
+                            const targetDir = baseDir.startsWith('gs://')
+                                ? `${baseDir}/${runId}`
+                                : path.join(baseDir, runId);
+
+                            if (baseDir.startsWith('gs://')) {
+                                const { uploadStreamToGcs } = require('./utils/gcs');
+                                await uploadStreamToGcs(`${targetDir}/${filename}`, archiveStream, 'application/x-tar');
+                            } else {
+                                await fs.ensureDir(targetDir);
+                                const destPath = path.join(targetDir, filename);
+                                const writeStream = fs.createWriteStream(destPath);
+                                await new Promise((resolve, reject) => {
+                                    archiveStream.pipe(writeStream)
+                                        .on('finish', resolve)
+                                        .on('error', reject);
+                                });
+                            }
+                            saveSpinner.stop(fmt.pass('saved workspace'));
+                        } else {
+                            saveSpinner.stop(fmt.fail('workspacesDir or logDir not set'));
+                        }
+                    } catch (e) {
+                        saveSpinner.stop(fmt.fail('failed to save workspace'));
+                        console.error(`Error saving workspace: ${e}`);
+                    }
+                }
                 await this.provider.cleanup(workspace);
             }
         }
@@ -525,11 +566,10 @@ export class EvalRunner {
         return sanitized;
     }
 
-    private async saveReport(report: EvalReport): Promise<void> {
+    private async saveReport(report: EvalReport, runId: string): Promise<void> {
         if (!this.logDir) return;
 
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileName = `${report.task}_${timestamp}.json`;
+        const fileName = `${runId}.json`;
 
         const store = getReportStore(this.logDir);
         await store.saveReport(fileName, report);

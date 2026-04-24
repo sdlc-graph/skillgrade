@@ -6,6 +6,7 @@ vi.mock('fs-extra', () => ({
   readFile: vi.fn(),
   ensureDir: vi.fn(),
   writeJSON: vi.fn(),
+  createWriteStream: vi.fn().mockReturnValue(new (require('stream').PassThrough)()),
 }));
 
 vi.mock('./graders', () => ({
@@ -417,6 +418,38 @@ describe('EvalRunner', () => {
       expect.anything(), expect.anything(), expect.anything(), 
       expect.objectContaining({ GEMINI_API_KEY: 'key1' })
     );
+  });
+
+  it('saves workspace archive when saveTrialWorkspace is true', async () => {
+    const provider = makeMockProvider();
+    const mockStream = new (require('stream').PassThrough)();
+    provider.getWorkspaceArchive = vi.fn().mockResolvedValue(mockStream);
+    
+    const agent = makeMockAgent();
+    const opts = makeEvalOpts({
+      saveTrialWorkspace: true,
+      workspacesDir: '/workspaces'
+    });
+
+    const gradersModule = await import('../src/graders/index');
+    vi.spyOn(gradersModule, 'getGrader').mockReturnValue({
+      grade: vi.fn().mockResolvedValue({
+        grader_type: 'deterministic', score: 1.0, weight: 1.0, details: 'ok',
+      }),
+    });
+
+    const mockCreateWriteStream = vi.mocked(fs.createWriteStream);
+
+    const runner = new EvalRunner(provider);
+    
+    // We need to emit finish on the stream to let the promise resolve
+    setTimeout(() => mockStream.emit('finish'), 100);
+
+    await runner.runEval(agent, '/task', [], opts, 1);
+
+    expect(provider.getWorkspaceArchive).toHaveBeenCalledWith('/workspace');
+    expect(mockEnsureDir).toHaveBeenCalledWith(expect.stringMatching(/^\/workspaces\/task_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_[a-f0-9]{8}$/));
+    expect(mockCreateWriteStream).toHaveBeenCalledWith(expect.stringMatching(/^\/workspaces\/task_\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2}-\d{3}Z_[a-f0-9]{8}\/trial_1\.tar$/));
   });
 
 });

@@ -22,3 +22,19 @@ export async function uploadToGcs(uri: string, data: string | object): Promise<v
         contentType: 'application/json'
     });
 }
+
+export async function uploadStreamToGcs(uri: string, stream: NodeJS.ReadableStream, contentType: string): Promise<void> {
+    const { bucket, prefix } = parseGcsUri(uri);
+    const storage = new Storage();
+    const bucketObj = storage.bucket(bucket);
+    const fileObj = bucketObj.file(prefix);
+    const writeStream = fileObj.createWriteStream({
+        contentType
+    });
+
+    return new Promise((resolve, reject) => {
+        stream.pipe(writeStream)
+            .on('finish', resolve)
+            .on('error', reject);
+    });
+}

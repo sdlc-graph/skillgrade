@@ -124,6 +124,12 @@ export class LocalProvider implements EnvironmentProvider {
         }
     }
 
+    async getWorkspaceArchive(workspacePath: string): Promise<NodeJS.ReadableStream> {
+        const { spawn } = require('child_process');
+        const tarProcess = spawn('tar', ['-cf', '-', '.'], { cwd: workspacePath });
+        return tarProcess.stdout;
+    }
+
     async runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
         return new Promise((resolve) => {
             const child = spawn(command, {
