@@ -425,7 +425,7 @@ All environment variables (including those from `.env` and `eval.yaml`) are **re
 
 ## Debugging Failed Trials
 
-If you use the `--save-trial-workspace` flag, SkillGrade will save the workspace of each trial as a tar archive in the `workspaces/` directory within your output directory.
+If you use the `--save-trial-workspace` flag, SkillGrade will save the workspace of each trial as a tar archive in a subdirectory named after the run ID (composed of task name, timestamp, and UUID) within the `workspaces/` directory in your output directory.
 
 You can use this archive to debug failed trials by extracting it and mounting it into a new container.
 
@@ -434,7 +434,7 @@ You can use this archive to debug failed trials by extracting it and mounting it
 1. Extract the archive:
    ```bash
    mkdir workspace
-   tar -xf path/to/output/workspaces/trial_1.tar -C workspace
+   tar -xf path/to/output/workspaces/<run_id>/trial_1.tar -C workspace
    ```
 
 2. Run a new container with the workspace mounted:
