@@ -92,10 +92,10 @@ export class LLMGrader implements Grader {
         sessionLog: any[],
         env?: Record<string, string>
     ): Promise<GraderResult> {
-        let questions: string[] = config.outcome_assertions || [];
+        let assertions: string[] = config.outcome_assertions || [];
         let rubricContent = '';
 
-        if (questions.length === 0) {
+        if (assertions.length === 0) {
             const rubricPath = path.join(taskPath, config.rubric || 'prompts/quality.md');
             if (!await fs.pathExists(rubricPath)) {
                 return {
@@ -136,23 +136,23 @@ export class LLMGrader implements Grader {
 
         const transcript = sections.join('\n\n');
 
-        const prompt = `You are an evaluation judge. Score the following agent session ${questions.length > 0 
-            ? 'based on the rubric below.\nFor each question in the rubric, provide a score between 0.0 and 1.0 and a brief explanation.' 
+        const prompt = `You are an evaluation judge. Score the following agent session ${assertions.length > 0 
+            ? 'based on the rubric below.\nFor each assertion in the rubric, provide a score between 0.0 and 1.0 and a brief explanation.' 
             : 'on a scale from 0.0 to 1.0 based on the rubric below.'}
 
 IMPORTANT CONTEXT: The agent runs inside a CLI wrapper (e.g., Gemini CLI). The agent's tool calls (file edits, shell commands) appear as text in the "Agent Output" section. This is a real execution trace, not hallucination. The "Prior Grader Results" section shows objective automated test results that verify the actual filesystem state after the agent ran.
 
 ## Rubric
-${questions.length > 0 ? questions.map((q, i) => `${i+1}. ${q}`).join('\n') : rubricContent}
+${assertions.length > 0 ? assertions.map((a, i) => `${i+1}. ${a}`).join('\n') : rubricContent}
 
 ## Session Transcript
 ${transcript}
 
-${questions.length > 0 
-    ? `Respond with ONLY a JSON object where the keys are the EXACT questions listed above:
+${assertions.length > 0 
+    ? `Respond with ONLY a JSON object where the keys are the EXACT assertions listed above:
 {
-  "Question 1 text": {"score": <number>, "reasoning": "<explanation>"},
-  "Question 2 text": ...
+  "Assertion 1 text": {"score": <number>, "reasoning": "<explanation>"},
+  "Assertion 2 text": ...
 }` 
     : 'Respond with ONLY a JSON object: {"score": <number>, "reasoning": "<brief explanation>"}'}`;
 
@@ -161,7 +161,7 @@ ${questions.length > 0
         const anthropicKey = env?.ANTHROPIC_API_KEY || process.env.ANTHROPIC_API_KEY;
 
         if (apiKey) {
-            return this.callGemini(prompt, apiKey, config, questions);
+            return this.callGemini(prompt, apiKey, config, assertions);
         } else if (anthropicKey) {
             return this.callAnthropic(prompt, anthropicKey, config);
         }
@@ -174,7 +174,7 @@ ${questions.length > 0
         };
     }
 
-    private async callGemini(prompt: string, apiKey: string, config: GraderConfig, questions?: string[]): Promise<GraderResult> {
+    private async callGemini(prompt: string, apiKey: string, config: GraderConfig, assertions?: string[]): Promise<GraderResult> {
         const genAI = new GoogleGenerativeAI(apiKey);
             
         // Define the exact shape of the JSON
@@ -187,12 +187,12 @@ ${questions.length > 0
             required: ["score", "reasoning"],
         };
 
-        if (questions && questions.length > 0) {
+        if (assertions && assertions.length > 0) {
             const properties: Record<string, Schema> = {};
             const required: string[] = [];
             
-            for (const q of questions) {
-                properties[q] = {
+            for (const a of assertions) {
+                properties[a] = {
                     type: SchemaType.OBJECT,
                     properties: {
                         score: { type: SchemaType.NUMBER },
@@ -200,7 +200,7 @@ ${questions.length > 0
                     },
                     required: ["score", "reasoning"],
                 };
-                required.push(q);
+                required.push(a);
             }
 
             schema = {
@@ -237,14 +237,14 @@ ${questions.length > 0
             
             try {
                 const parsed = JSON.parse(cleaned);
-                if (questions && questions.length > 0) {
+                if (assertions && assertions.length > 0) {
                     const scores: number[] = [];
                     const detailsLines: string[] = [];
-                    for (const q of questions) {
-                        const evalItem = parsed[q];
+                    for (const a of assertions) {
+                        const evalItem = parsed[a];
                         if (evalItem) {
                             scores.push(evalItem.score);
-                            detailsLines.push(`  ${evalItem.score >= 0.5 ? '✓' : '✗'} ${q}: ${evalItem.reasoning}`);
+                            detailsLines.push(`  ${evalItem.score >= 0.5 ? '✓' : '✗'} ${a}: ${evalItem.reasoning}`);
                         }
                     }
                     const avgScore = scores.length > 0 ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
@@ -319,15 +319,15 @@ ${questions.length > 0
             if (jsonMatch) {
                 const parsed = JSON.parse(jsonMatch[0]);
                 
-                const questions = config.outcome_assertions || [];
-                if (questions.length > 0) {
+                const assertions = config.outcome_assertions || [];
+                if (assertions.length > 0) {
                     const scores: number[] = [];
                     const detailsLines: string[] = [];
-                    for (const q of questions) {
-                        const evalItem = parsed[q];
+                    for (const a of assertions) {
+                        const evalItem = parsed[a];
                         if (evalItem) {
                             scores.push(evalItem.score);
-                            detailsLines.push(`  ${evalItem.score >= 0.5 ? '✓' : '✗'} ${q}: ${evalItem.reasoning}`);
+                            detailsLines.push(`  ${evalItem.score >= 0.5 ? '✓' : '✗'} ${a}: ${evalItem.reasoning}`);
                         }
                     }
                     if (scores.length > 0) {
@@ -344,7 +344,7 @@ ${questions.length > 0
                 if (parsed.evaluations) {
                     const scores = parsed.evaluations.map((e: any) => e.score);
                     const avgScore = scores.reduce((a: number, b: number) => a + b, 0) / scores.length;
-                    const details = parsed.evaluations.map((e: any) => `  ${e.score >= 0.5 ? '✓' : '✗'} ${e.question}: ${e.reasoning}`).join('\n');
+                    const details = parsed.evaluations.map((e: any) => `  ${e.score >= 0.5 ? '✓' : '✗'} ${e.assertion}: ${e.reasoning}`).join('\n');
                     return {
                         grader_type: 'llm_rubric',
                         score: avgScore,

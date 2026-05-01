@@ -13,7 +13,7 @@ export interface GraderConfig {
     type: 'deterministic' | 'llm_rubric' | 'tool_usage';
     command?: string;         // for deterministic: shell command to execute (e.g. 'bash tests/test.sh')
     rubric?: string;          // for llm_rubric: file path to rubric (e.g. 'prompts/quality.md')
-    outcome_assertions?: string[]; // for llm_rubric: list of assertions/questions
+    outcome_assertions?: string[]; // for llm_rubric: list of assertions
     model?: string;           // for llm_rubric: LLM model override
     expectedTools?: ExpectedTool[];  // for tool_usage: list of expected tool calls
     weight: number;
