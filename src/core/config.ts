@@ -139,6 +139,9 @@ function validateConfig(raw: any): EvalConfig {
         env: raw.defaults?.env,
         trialConfig: raw.defaults?.trialConfig,
         workspace: validateWorkspaceMappings(raw.defaults?.workspace, 'defaults'),
+        agentWorkingDir: raw.defaults?.agentWorkingDir,
+        prohibitedEventsBeforeActivation: raw.defaults?.prohibitedEventsBeforeActivation,
+        expectedSkill: raw.defaults?.expectedSkill,
     };
 
     validateEnv(defaults.env, 'defaults.env');
@@ -147,12 +150,24 @@ function validateConfig(raw: any): EvalConfig {
     if (defaults.trialConfig?.env) {
         validateEnv(defaults.trialConfig.env, 'defaults.trialConfig.env');
     }
-
-    if (!raw.tasks || !Array.isArray(raw.tasks) || raw.tasks.length === 0) {
-        throw new Error('eval.yaml must have at least one task in the "tasks" array');
+    if (defaults.agentWorkingDir && typeof defaults.agentWorkingDir !== 'string') {
+        throw new Error('defaults.agentWorkingDir must be a string');
+    }
+    if (defaults.prohibitedEventsBeforeActivation && !Array.isArray(defaults.prohibitedEventsBeforeActivation)) {
+        throw new Error('defaults.prohibitedEventsBeforeActivation must be an array of strings');
+    }
+    if (defaults.expectedSkill && typeof defaults.expectedSkill !== 'string') {
+        throw new Error('defaults.expectedSkill must be a string');
     }
 
-    const tasks: EvalTaskConfig[] = raw.tasks.map((t: any, i: number) => {
+    const hasTasks = raw.tasks && Array.isArray(raw.tasks) && raw.tasks.length > 0;
+    const hasSkillActivation = raw.skillActivationTasks && Array.isArray(raw.skillActivationTasks) && raw.skillActivationTasks.length > 0;
+
+    if (!hasTasks && !hasSkillActivation) {
+        throw new Error('eval.yaml must have at least one task in the "tasks" or "skillActivationTasks" array');
+    }
+
+    const tasks: EvalTaskConfig[] = hasTasks ? raw.tasks.map((t: any, i: number) => {
         if (!t.name) throw new Error(`Task ${i} is missing a "name"`);
         if (!t.instruction) throw new Error(`Task "${t.name}" is missing an "instruction"`);
         if (!t.graders || !Array.isArray(t.graders) || t.graders.length === 0) {
@@ -213,9 +228,41 @@ function validateConfig(raw: any): EvalConfig {
             environment: t.environment,
             agentWorkingDir: t.agentWorkingDir,
         };
-    });
+    }) : [];
 
-    return { version, skill: raw.skill, defaults, tasks };
+    // Parse and normalize dedicated skill activation tasks
+    const skillActivationTasks = hasSkillActivation ? raw.skillActivationTasks.map((t: any, i: number) => {
+        if (!t.instruction) throw new Error(`SkillActivationTask ${i} is missing an "instruction"`);
+        if (!t.expectedSkill && !defaults.expectedSkill) {
+            throw new Error(`SkillActivationTask ${i} is missing an "expectedSkill"`);
+        }
+
+        validateTrialConfig(t.trialConfig, `SkillActivationTask ${i} trialConfig`);
+        if (t.trialConfig?.env) {
+            validateEnv(t.trialConfig.env, `SkillActivationTask ${i} trialConfig.env`);
+        }
+
+        if (t.agentWorkingDir && typeof t.agentWorkingDir !== 'string') {
+            throw new Error(`SkillActivationTask ${i} agentWorkingDir must be a string`);
+        }
+        if (t.prohibitedEventsBeforeActivation && !Array.isArray(t.prohibitedEventsBeforeActivation)) {
+            throw new Error(`SkillActivationTask ${i} prohibitedEventsBeforeActivation must be an array of strings`);
+        }
+
+        return {
+            name: t.name || `activate-${t.expectedSkill || defaults.expectedSkill}-${i}`,
+            instruction: t.instruction,
+            expectedSkill: t.expectedSkill,
+            trialConfig: t.trialConfig,
+            agentWorkingDir: t.agentWorkingDir,
+            timeout: t.timeout,
+            prohibitedEventsBeforeActivation: t.prohibitedEventsBeforeActivation,
+            graders: [],
+            workspace: [],
+        };
+    }) : [];
+
+    return { version, skill: raw.skill, defaults, tasks, skillActivationTasks };
 }
 
 /**
@@ -337,7 +384,69 @@ export async function resolveTask(
         environment,
         env,
         trialConfig,
-        agentWorkingDir: task.agentWorkingDir,
+        agentWorkingDir: task.agentWorkingDir || defaults.agentWorkingDir,
+    };
+}
+
+/**
+ * Dedicated task resolution function for Skill Activation Tests.
+ */
+export async function resolveSkillActivationTask(
+    task: any,
+    defaults: EvalDefaults,
+    baseDir: string
+): Promise<ResolvedTask> {
+    const agent = defaults.agent;
+    const provider = defaults.provider;
+    const trials = task.trials ?? defaults.trials;
+    const timeout = task.timeout ?? defaults.timeout;
+    const docker = defaults.docker;
+    const environment = defaults.environment;
+    const grader_model = defaults.grader_model;
+    const env = { ...defaults.env };
+
+    const instruction = await resolveFileOrInline(task.instruction, baseDir);
+
+    const defaultTC = defaults.trialConfig;
+    const taskTC = task.trialConfig;
+    let trialConfig: TrialConfig | undefined = undefined;
+
+    if (defaultTC || taskTC) {
+        const env = { ...defaultTC?.env, ...taskTC?.env };
+        const setupParts = [];
+        if (defaultTC?.setup) setupParts.push(await resolveFileOrInline(defaultTC.setup, baseDir));
+        if (taskTC?.setup) setupParts.push(await resolveFileOrInline(taskTC.setup, baseDir));
+
+        const cleanupParts = [];
+        if (defaultTC?.cleanup) cleanupParts.push(await resolveFileOrInline(defaultTC.cleanup, baseDir));
+        if (taskTC?.cleanup) cleanupParts.push(await resolveFileOrInline(taskTC.cleanup, baseDir));
+
+        const mergedEnv = Object.keys(env).length > 0 ? env : undefined;
+        const mergedSetup = setupParts.length > 0 ? setupParts.join('\n') : undefined;
+        const mergedCleanup = cleanupParts.length > 0 ? cleanupParts.join('\n') : undefined;
+
+        if (mergedEnv || mergedSetup || mergedCleanup) {
+            trialConfig = { env: mergedEnv, setup: mergedSetup, cleanup: mergedCleanup };
+        }
+    }
+
+    return {
+        name: task.name,
+        instruction,
+        workspace: defaults.workspace || [],
+        graders: [],
+        agent,
+        provider,
+        trials,
+        timeout,
+        grader_model,
+        docker,
+        environment,
+        env,
+        trialConfig,
+        agentWorkingDir: task.agentWorkingDir || defaults.agentWorkingDir,
+        expectedSkill: task.expectedSkill || defaults.expectedSkill,
+        prohibitedEventsBeforeActivation: task.prohibitedEventsBeforeActivation || defaults.prohibitedEventsBeforeActivation || [],
     };
 }
 

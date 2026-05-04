@@ -84,13 +84,20 @@ export async function runEvals(dir: string, opts: RunOptions) {
     }
 
     // Filter evals
-    let tasksToRun = config.tasks;
+    let tasksToRun = [...(config.tasks || [])];
+    let skillActivationTasksToRun = [...(config.skillActivationTasks || [])];
+
     if (opts.eval) {
         const evalNames = opts.eval.split(',').map(s => s.trim());
-        tasksToRun = config.tasks.filter(t => evalNames.includes(t.name));
-        if (tasksToRun.length === 0) {
+        tasksToRun = tasksToRun.filter(t => evalNames.includes(t.name));
+        skillActivationTasksToRun = skillActivationTasksToRun.filter(t => evalNames.includes(t.name || ''));
+        if (tasksToRun.length === 0 && skillActivationTasksToRun.length === 0) {
             console.error(`  ${fmt.red('error')}  eval "${opts.eval}" not found`);
-            console.log(`  ${fmt.dim('available:')} ${config.tasks.map(t => t.name).join(', ')}`);
+            const availableNames = [
+                ...config.tasks.map(t => t.name),
+                ...(config.skillActivationTasks || []).map(t => t.name || '')
+            ].filter(Boolean);
+            console.log(`  ${fmt.dim('available:')} ${availableNames.join(', ')}`);
             throw new Error(`Eval "${opts.eval}" not found`);
         }
     }
@@ -118,7 +125,7 @@ export async function runEvals(dir: string, opts: RunOptions) {
     const reports: EvalReport[] = [];
     let allPassed = true;
 
-    // Run each task
+    // 1. Run standard general tasks loop using original baseline logic
     for (const taskDef of tasksToRun) {
         const resolved = await resolveTask(taskDef, config.defaults, dir);
         const mergedEnv = {
@@ -171,10 +178,11 @@ export async function runEvals(dir: string, opts: RunOptions) {
         }
         const providerName = opts.provider || resolved.provider;
 
-        // Pick provider
-        const provider = providerName === 'docker'
-            ? new DockerProvider()
-            : new LocalProvider();
+        const provider = providerName === 'docker' ? new DockerProvider() : new LocalProvider();
+
+        if (!resultsDir.startsWith('gs://')) {
+            await fs.ensureDir(resultsDir);
+        }
 
         const runner = new EvalRunner(provider, resultsDir, opts.noRedact);
 
@@ -252,8 +260,72 @@ export async function runEvals(dir: string, opts: RunOptions) {
             }
         }
 
-        // Cleanup temp dir
-        try { await fs.remove(tmpTaskDir); } catch { /* ignore cleanup errors */ }
+        try { await fs.remove(tmpTaskDir); } catch { }
+    }
+
+    // 2. Run dedicated skill activation tests loop inside completely separate sub-routine
+    const { resolveSkillActivationTask } = require('../core/config');
+    const activationResultsDir = resultsDir.startsWith('gs://') ? `${resultsDir}/skill_activation` : path.join(resultsDir, 'skill_activation');
+
+    for (const taskDef of skillActivationTasksToRun) {
+        const resolved = await resolveSkillActivationTask(taskDef, config.defaults, dir);
+        const mergedEnv = {
+            ...env,
+            ...resolved.env,
+        };
+        const trials = opts.trials ?? resolved.trials;
+
+        const localTmpBase = outputBase.startsWith('gs://') ? path.join(os.tmpdir(), 'skillgrade', skillName) : outputDir;
+        const tmpTaskDir = path.join(localTmpBase, 'tmp', resolved.name);
+        await prepareTempTaskDir(resolved, dir, tmpTaskDir);
+
+        const evalOpts: EvalRunOptions = {
+            instruction: resolved.instruction,
+            graders: [],
+            timeoutSec: resolved.timeout,
+            graderModel: resolved.grader_model,
+            environment: resolved.environment,
+            trialConfig: {
+                setup: resolved.trialConfig?.setup ? 'bash .skillgrade/scripts/trial_setup.sh' : undefined,
+                cleanup: resolved.trialConfig?.cleanup ? 'bash .skillgrade/scripts/trial_cleanup.sh' : undefined,
+                env: resolved.trialConfig?.env,
+            },
+            agentWorkingDir: resolved.agentWorkingDir,
+            workspace: resolved.workspace,
+            saveTrialWorkspace: opts.saveTrialWorkspace,
+            workspacesDir: workspacesDir,
+            expectedSkill: resolved.expectedSkill,
+            prohibitedEventsBeforeActivation: resolved.prohibitedEventsBeforeActivation,
+        };
+
+        let agentName = opts.agent || resolved.agent;
+        const providerName = opts.provider || resolved.provider;
+        const provider = providerName === 'docker' ? new DockerProvider() : new LocalProvider();
+
+        if (!activationResultsDir.startsWith('gs://')) {
+            await fs.ensureDir(activationResultsDir);
+        }
+
+        const runner = new EvalRunner(provider, activationResultsDir, opts.noRedact);
+
+        header(resolved.name);
+        console.log(`    [Skill Activation Mode] agent: ${agentName}  provider: ${providerName}  trials: ${trials}`);
+        console.log();
+
+        try {
+            const report = await runner.runSkillActivationEval(createAgent(agentName), tmpTaskDir, skillsPaths, evalOpts, trials, mergedEnv);
+            reports.push(report);
+            resultsSummary(report.pass_rate, report.pass_at_k, report.pass_pow_k, trials, opts.preset);
+
+            if (report.pass_rate < (opts.threshold ?? config.defaults.threshold)) {
+                allPassed = false;
+            }
+        } catch (err) {
+            console.error(`\n  ${fmt.fail('error')}  skill activation evaluation failed: ${err}\n`);
+            allPassed = false;
+        }
+
+        try { await fs.remove(tmpTaskDir); } catch { }
     }
 
     // CI mode: exit with appropriate code

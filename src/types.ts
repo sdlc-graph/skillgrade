@@ -104,7 +104,7 @@ export interface EnvironmentProvider {
     getWorkspaceArchive?(workspacePath: string): Promise<NodeJS.ReadableStream>;
     /** One-time teardown. */
     teardown?(): Promise<void>;
-    runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult>;
+    runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal; onStdoutLine?: (line: string) => void }): Promise<CommandResult>;
     diagnose?(workspacePath: string): Promise<string>;
     resolveWorkspacePath?(filePath: string, workspacePath: string): string;
 }
