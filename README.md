@@ -324,6 +324,41 @@ graders:
 
 Final reward = `Σ (grader_score × weight) / Σ weight`
 
+### Skill Activation Tests
+
+Skill Activation Tests are a specialized, high-efficiency category of evaluation tasks designed to test whether an agent correctly matches a user prompt's intent and triggers the exact custom plugin skill expected. Instead of using the `tasks:` array, place them under the dedicated **`skillActivationTasks:`** block. 
+
+These tests stream the agent's execution logs line-by-line in real-time and feature **early termination**:
+* **Early Success**: The moment the agent activates the `expectedSkill` (or calls `activate_skill` specifying it in parameters), the trial instantly logs success (reward `1.0`) and halts early.
+* **Early Failure**: If the agent triggers any tool or event matching a regex pattern defined inside the optional **`prohibitedEventsBeforeActivation`** list, it instantly logs failure (reward `0.0`) and halts early.
+* **Neutral Tolerance**: By default, any general utility tool calls (like `list_directory` or `run_shell_command`) that do not match the prohibited regex list are tolerated as neutral actions, letting the agent continue reasoning smoothly.
+
+#### Reference Example:
+```yaml
+defaults:
+  agent: gemini
+  provider: local
+  trialConfig:
+    setup: git clone https://github.com/org/repo.git /workspace
+    cleanup: rm -rf /workspace
+  agentWorkingDir: /workspace
+  expectedSkill: google-cicd-deploy
+  prohibitedEventsBeforeActivation:
+    - "^activate_skill.*(?!google-cicd-deploy)" # block any expected skill activation except google-cicd-deploy
+    - "^mcp_.*"                                 # block any unexpected MCP tool triggers early
+    - "run_shell_command.*gcloud"               # block shell actions calling gcloud early
+
+
+skillActivationTasks:
+
+  - instruction: I want to push my Node backend to Cloud Run.
+  
+  - instruction: How do I architect a secure CI/CD cluster?
+    expectedSkill: google-cicd-pipeline-design                  # task-level override
+    prohibitedEventsBeforeActivation:
+      - "^activate_skill.*(?!google-cicd-pipeline-design)"      # task-level custom blocklist
+```
+
 ## CI Integration
 
 Use `--provider=local` in CI — the runner is already an ephemeral sandbox, so Docker adds overhead without benefit.

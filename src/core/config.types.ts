@@ -95,6 +95,7 @@ export interface EvalDefaults {
     workspace?: WorkspaceMapping[];
     agentWorkingDir?: string;
     prohibitedEventsBeforeActivation?: string[];
+    expectedSkill?: string;
 }
 
 /** Top-level configuration file (e.g. eval.yaml) */

@@ -141,6 +141,7 @@ function validateConfig(raw: any): EvalConfig {
         workspace: validateWorkspaceMappings(raw.defaults?.workspace, 'defaults'),
         agentWorkingDir: raw.defaults?.agentWorkingDir,
         prohibitedEventsBeforeActivation: raw.defaults?.prohibitedEventsBeforeActivation,
+        expectedSkill: raw.defaults?.expectedSkill,
     };
 
     validateEnv(defaults.env, 'defaults.env');
@@ -154,6 +155,9 @@ function validateConfig(raw: any): EvalConfig {
     }
     if (defaults.prohibitedEventsBeforeActivation && !Array.isArray(defaults.prohibitedEventsBeforeActivation)) {
         throw new Error('defaults.prohibitedEventsBeforeActivation must be an array of strings');
+    }
+    if (defaults.expectedSkill && typeof defaults.expectedSkill !== 'string') {
+        throw new Error('defaults.expectedSkill must be a string');
     }
 
     const hasTasks = raw.tasks && Array.isArray(raw.tasks) && raw.tasks.length > 0;
@@ -439,7 +443,7 @@ export async function resolveSkillActivationTask(
         env,
         trialConfig,
         agentWorkingDir: task.agentWorkingDir || defaults.agentWorkingDir,
-        expectedSkill: task.expectedSkill,
+        expectedSkill: task.expectedSkill || defaults.expectedSkill,
         prohibitedEventsBeforeActivation: task.prohibitedEventsBeforeActivation || defaults.prohibitedEventsBeforeActivation || [],
     };
 }
