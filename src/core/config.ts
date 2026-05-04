@@ -233,7 +233,9 @@ function validateConfig(raw: any): EvalConfig {
     // Parse and normalize dedicated skill activation tasks
     const skillActivationTasks = hasSkillActivation ? raw.skillActivationTasks.map((t: any, i: number) => {
         if (!t.instruction) throw new Error(`SkillActivationTask ${i} is missing an "instruction"`);
-        if (!t.expectedSkill) throw new Error(`SkillActivationTask ${i} is missing an "expectedSkill"`);
+        if (!t.expectedSkill && !defaults.expectedSkill) {
+            throw new Error(`SkillActivationTask ${i} is missing an "expectedSkill"`);
+        }
 
         validateTrialConfig(t.trialConfig, `SkillActivationTask ${i} trialConfig`);
         if (t.trialConfig?.env) {
