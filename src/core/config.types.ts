@@ -66,6 +66,18 @@ export interface EvalTaskConfig {
     docker?: DockerConfig;
     environment?: Partial<EnvironmentConfig>;
     agentWorkingDir?: string;
+    expectedSkill?: string;
+}
+
+/** Single skill activation test case configuration */
+export interface SkillActivationTaskConfig {
+    name?: string;          // optional unique task name
+    instruction: string;    // prompt query passed to the agent
+    expectedSkill: string;  // the exact skill identifier expected to be activated
+    trialConfig?: TrialConfig; // per-trial execution hooks
+    agentWorkingDir?: string;  // agent task custom working directory
+    timeout?: number;       // trial timeout limit
+    prohibitedEventsBeforeActivation?: string[]; // regex patterns of event json lines prohibited before activation
 }
 
 /** Top-level defaults */
@@ -81,6 +93,8 @@ export interface EvalDefaults {
     env?: Record<string, string>;
     trialConfig?: TrialConfig;
     workspace?: WorkspaceMapping[];
+    agentWorkingDir?: string;
+    prohibitedEventsBeforeActivation?: string[];
 }
 
 /** Top-level configuration file (e.g. eval.yaml) */
@@ -89,6 +103,7 @@ export interface EvalConfig {
     skill?: string;         // optional path to SKILL.md (defaults to auto-detection)
     defaults: EvalDefaults;
     tasks: EvalTaskConfig[];
+    skillActivationTasks?: SkillActivationTaskConfig[]; // dedicated activation intent test suite
 }
 
 /** Resolved task — all defaults applied, file references resolved to content */
@@ -108,6 +123,8 @@ export interface ResolvedTask {
     environment: EnvironmentConfig;
     env?: Record<string, string>;
     agentWorkingDir?: string;
+    expectedSkill?: string;
+    prohibitedEventsBeforeActivation?: string[];
 }
 
 export interface ResolvedGrader {

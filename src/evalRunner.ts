@@ -67,6 +67,8 @@ export interface EvalRunOptions {
     workspace?: WorkspaceMapping[];
     saveTrialWorkspace?: boolean;
     workspacesDir?: string;
+    expectedSkill?: string;
+    prohibitedEventsBeforeActivation?: string[];
 }
 
 export class EvalRunner {
@@ -218,7 +220,7 @@ export class EvalRunner {
         let commandCount = 0;
         const startTime = Date.now();
         const trialId = index + 1;
-        
+
         const trialEnv: Record<string, string> = {
             ...(env || {}),
             ...(opts.trialConfig?.env || {}),
@@ -498,9 +500,9 @@ export class EvalRunner {
                     try {
                         const archiveStream = await this.provider.getWorkspaceArchive(workspace);
                         const filename = `trial_${trialId}.tar`;
-                        
+
                         const baseDir = opts.workspacesDir || this.logDir;
-                        
+
                         if (baseDir) {
                             const targetDir = baseDir.startsWith('gs://')
                                 ? `${baseDir}/${runId}`
@@ -573,5 +575,272 @@ export class EvalRunner {
 
         const store = getReportStore(this.logDir);
         await store.saveReport(fileName, report);
+    }
+
+    /**
+     * Dedicated evaluation pipeline wrapper for running Skill Activation Tests.
+     */
+    async runSkillActivationEval(
+        agent: BaseAgent,
+        taskPath: string,
+        skillsPaths: string[],
+        opts: EvalRunOptions,
+        numTrials: number = 1,
+        env?: Record<string, string>
+    ): Promise<EvalReport> {
+        const taskName = path.basename(taskPath);
+        const startTime = this.timestamp();
+        const evalUuid = crypto.randomUUID().substring(0, 8);
+        const filenameTimestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const runId = `${taskName}_${filenameTimestamp}_${evalUuid}`;
+        console.log(`\n${fmt.bold('Eval UUID (Skill Activation):')} ${evalUuid}`);
+
+        if (this.provider.prepare) {
+            const buildSpinner = new Spinner('build', 'building image');
+            try {
+                await this.provider.prepare(taskPath, skillsPaths, opts, env);
+                buildSpinner.stop(`${fmt.dim('image ready')}`);
+            } catch (err) {
+                buildSpinner.stop(`${fmt.fail('build failed')}`);
+                throw err;
+            }
+        }
+
+        const trials: TrialResult[] = [];
+        try {
+            for (let i = 0; i < numTrials; i++) {
+                if (this.isCancelled) break;
+                const result = await this.runSkillActivationTrial(agent, taskPath, skillsPaths, opts, i, numTrials, evalUuid, runId, env);
+                trials.push(result);
+            }
+        } finally {
+            if (this.provider.teardown) {
+                await this.provider.teardown();
+            }
+        }
+
+        const completedTrials = trials.filter(t => t.status !== 'cancelled');
+        const totalReward = completedTrials.reduce((sum, t) => sum + t.reward, 0);
+        const nComp = completedTrials.length || 1;
+
+        const report: EvalReport = {
+            task: taskName,
+            timestamp: startTime,
+            status: this.isCancelled ? 'partial' : 'completed',
+            pass_rate: totalReward / nComp,
+            pass_at_k: totalReward / nComp,
+            pass_pow_k: totalReward / nComp,
+            trials,
+            skills_used: skillsPaths.map(p => path.basename(p)),
+            eval_uuid: evalUuid
+        };
+
+        if (this.logDir) {
+            const sanitized = this.noRedact ? report : this.sanitize(report, env);
+            await this.saveReport(sanitized, runId);
+        }
+
+        return report;
+    }
+
+    /**
+     * Dedicated single trial sub-routine executing real-time line-by-line 
+     * streaming JSON tool use matching and early task termination hooks.
+     */
+    private async runSkillActivationTrial(
+        agent: BaseAgent,
+        taskPath: string,
+        skillsPaths: string[],
+        opts: EvalRunOptions,
+        index: number,
+        total: number,
+        evalUuid: string,
+        runId: string,
+        env?: Record<string, string>
+    ): Promise<TrialResult> {
+        const sessionLog: LogEntry[] = [];
+        let commandCount = 0;
+        const startTime = Date.now();
+        const trialId = index + 1;
+        const trialIdStr = trialId.toString();
+
+        const trialEnv: Record<string, string> = {
+            ...(env || {}),
+            ...(opts.trialConfig?.env || {}),
+            _EVAL_TRIAL: trialIdStr,
+            _EVAL_UUID: evalUuid,
+        };
+
+        const instruction = opts.instruction.replace(/\{\{trial\}\}/g, trialIdStr);
+        const trialSetup = opts.trialConfig?.setup?.replace(/\{\{trial\}\}/g, trialIdStr);
+        const trialCleanup = opts.trialConfig?.cleanup?.replace(/\{\{trial\}\}/g, trialIdStr);
+        const configuredAgentWorkingDir = opts.agentWorkingDir?.replace(/\{\{trial\}\}/g, trialIdStr);
+
+        const spinner = new Spinner(`${trialId}/${total}`, 'setting up activation environment');
+        let workspace: string | undefined;
+
+        try {
+            workspace = await this.provider.setup(taskPath, skillsPaths, {
+                timeoutSec: opts.timeoutSec,
+                environment: opts.environment,
+                workspace: opts.workspace,
+                agentWorkingDir: configuredAgentWorkingDir
+            }, trialEnv);
+
+            sessionLog.push({ type: 'agent_start', timestamp: this.timestamp(), instruction });
+
+            if (trialSetup) {
+                spinner.update('running trial setup');
+                const res = await this.provider.runCommand(workspace, trialSetup, trialEnv);
+                if (res.exitCode !== 0) throw new Error(`Per-trial setup failed with exit code ${res.exitCode}`);
+            }
+
+            spinner.update('running agent');
+            const abortController = new AbortController();
+            let skillActivationSuccess: boolean | undefined = undefined;
+
+            const loggedRunCommand = async (cmd: string, cmdOpts?: { signal?: AbortSignal }) => {
+                const timestamp = this.timestamp();
+                const entry: LogEntry = { type: 'command', timestamp: timestamp, command: cmd, stdout: '', stderr: '', exitCode: 0 };
+                sessionLog.push(entry);
+
+                const onStdoutLine = opts.expectedSkill ? (line: string) => {
+                    const trimmed = line.trim();
+                    if (!trimmed) return;
+                    try {
+                        const event = JSON.parse(trimmed);
+                        if (event.type === 'tool_use') {
+                            let toolName = event.tool_name || event.name || (event.tool_use && event.tool_use.name);
+                            if (toolName === 'activate_skill') {
+                                const skillParam = event.parameters?.name || event.args?.name || (event.tool_use?.parameters?.name);
+                                if (skillParam) toolName = skillParam;
+                            }
+                            if (toolName) {
+                                const isExpected = toolName === opts.expectedSkill || toolName.startsWith(opts.expectedSkill + '_') || toolName.startsWith(opts.expectedSkill + '-');
+                                if (isExpected) {
+                                    skillActivationSuccess = true;
+                                    console.log(`\n  Expected skill "${opts.expectedSkill}" activated! Terminating early...`);
+                                    abortController.abort();
+                                } else {
+                                    const prohibitedList = opts.prohibitedEventsBeforeActivation || [];
+                                    let isProhibited = false;
+                                    for (const pattern of prohibitedList) {
+                                        const regex = new RegExp(pattern);
+                                        if (regex.test(trimmed)) {
+                                            isProhibited = true;
+                                            break;
+                                        }
+                                    }
+                                    if (isProhibited) {
+                                        skillActivationSuccess = false;
+                                        console.log(`\n  Prohibited event matched pattern "${toolName || trimmed}"! Terminating early...`);
+                                        abortController.abort();
+                                    } else {
+                                        const cmdDetails = event.parameters?.command || event.args?.command || event.parameters?.cmd || event.args?.cmd || event.parameters?.path || event.args?.path || '';
+                                        const detailsSuffix = cmdDetails ? ` ("${cmdDetails}")` : '';
+                                        console.log(`\n  Tool/Skill "${toolName}"${detailsSuffix} called before activation. Continuing execution context loop...`);
+                                    }
+                                }
+                            }
+                        }
+                    } catch (e) { }
+                } : undefined;
+
+                try {
+                    const result = await this.provider.runCommand(workspace!, cmd, trialEnv, {
+                        signal: cmdOpts?.signal || abortController.signal,
+                        onStdoutLine
+                    });
+                    commandCount++;
+                    entry.stdout = result.stdout;
+                    entry.stderr = result.stderr;
+                    entry.exitCode = result.exitCode;
+                    return result;
+                } catch (e: any) {
+                    entry.stderr = `Error: ${e.message || e}`;
+                    entry.exitCode = 1;
+                    throw e;
+                }
+            };
+
+            const agentTimeoutMs = opts.timeoutSec * 1000;
+            const agentWorkingDir = (configuredAgentWorkingDir && this.provider.resolveWorkspacePath)
+                ? this.provider.resolveWorkspacePath(configuredAgentWorkingDir, workspace)
+                : configuredAgentWorkingDir;
+
+            const abortTimer = setTimeout(() => { abortController.abort(); }, agentTimeoutMs);
+            let agentLogs: string;
+
+            try {
+                agentLogs = await withTimeout(
+                    agent.run(instruction, workspace, loggedRunCommand, { agentWorkingDir, signal: abortController.signal }),
+                    agentTimeoutMs + 5000,
+                    `Agent (limit: ${opts.timeoutSec}s)`
+                );
+            } catch (err: any) {
+                if (opts.expectedSkill && skillActivationSuccess !== undefined) {
+                    agentLogs = `Skill activation test early termination: success=${skillActivationSuccess}`;
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                } else {
+                    sessionLog.push({ type: 'agent_result', timestamp: this.timestamp(), output: `Agent execution failed or timed out. Error: ${err.message || err}` });
+                    throw err;
+                }
+            } finally {
+                clearTimeout(abortTimer);
+            }
+
+            sessionLog.push({ type: 'agent_result', timestamp: this.timestamp(), output: agentLogs });
+
+            const reward = skillActivationSuccess === true ? 1.0 : 0.0;
+            const activationGraderResult: GraderResult = {
+                grader_type: 'skill_activation',
+                score: reward,
+                weight: 1.0,
+                details: skillActivationSuccess === true
+                    ? `Successfully activated expected skill: ${opts.expectedSkill}`
+                    : (skillActivationSuccess === false
+                        ? `Failed to activate expected skill: unexpected skill/tool activated instead of "${opts.expectedSkill}"`
+                        : `Failed to activate expected skill: ${opts.expectedSkill} (timed out or terminated without tool use)`)
+            };
+            sessionLog.push({ type: 'grader', timestamp: this.timestamp(), grader_result: activationGraderResult });
+            sessionLog.push({ type: 'reward', timestamp: this.timestamp(), value: reward });
+
+            const duration_ms = Date.now() - startTime;
+            const status = reward >= 0.5 ? fmt.pass('PASS') : fmt.fail('FAIL');
+            spinner.stop(`${status}  ${fmt.bold(reward.toFixed(2))}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}  ${fmt.dim(commandCount + ' cmds')}`);
+
+            return {
+                trial_id: index + 1,
+                reward,
+                grader_results: [activationGraderResult],
+                duration_ms,
+                n_commands: commandCount,
+                input_tokens: Math.ceil(instruction.length / 4),
+                output_tokens: 0,
+                session_log: sessionLog,
+                status: 'completed'
+            };
+        } catch (err: any) {
+            const duration_ms = Date.now() - startTime;
+            spinner.stop(`${fmt.fail('FAIL')}  ${fmt.dim((duration_ms / 1000).toFixed(1) + 's')}`);
+            return {
+                trial_id: index + 1,
+                reward: 0,
+                grader_results: [],
+                duration_ms,
+                n_commands: commandCount,
+                input_tokens: 0,
+                output_tokens: 0,
+                session_log: sessionLog,
+                status: 'failed'
+            };
+        } finally {
+            if (workspace) {
+                if (trialCleanup) {
+                    try { await this.provider.runCommand(workspace, trialCleanup, trialEnv); } catch (e) { }
+                }
+                await this.provider.cleanup(workspace);
+            }
+        }
     }
 }

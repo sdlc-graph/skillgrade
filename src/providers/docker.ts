@@ -213,7 +213,7 @@ export class DockerProvider implements EnvironmentProvider {
         return files;
     }
 
-    async runCommand(containerId: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
+    async runCommand(containerId: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal; onStdoutLine?: (line: string) => void }): Promise<CommandResult> {
         const container = this.docker.getContainer(containerId);
         const envPairs = env ? Object.entries(env).map(([k, v]) => `${k}=${v}`) : [];
 
@@ -239,10 +239,22 @@ export class DockerProvider implements EnvironmentProvider {
         const { stdout, stderr } = await new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
             let stdoutData = '';
             let stderrData = '';
+            let stdoutBuffer = '';
             const stdoutStream = new (require('stream').PassThrough)();
             const stderrStream = new (require('stream').PassThrough)();
 
-            stdoutStream.on('data', (chunk: Buffer) => { stdoutData += chunk.toString(); });
+            stdoutStream.on('data', (chunk: Buffer) => {
+                const str = chunk.toString();
+                stdoutData += str;
+                if (opts?.onStdoutLine) {
+                    stdoutBuffer += str;
+                    const lines = stdoutBuffer.split('\n');
+                    stdoutBuffer = lines.pop() || '';
+                    for (const line of lines) {
+                        opts.onStdoutLine(line);
+                    }
+                }
+            });
             stderrStream.on('data', (chunk: Buffer) => { stderrData += chunk.toString(); });
 
             if (opts?.signal) {
@@ -278,10 +290,23 @@ export class DockerProvider implements EnvironmentProvider {
                 }
             }
 
+            const flushBuffer = () => {
+                if (stdoutBuffer && opts?.onStdoutLine) {
+                    opts.onStdoutLine(stdoutBuffer);
+                    stdoutBuffer = '';
+                }
+            };
+
             this.docker.modem.demuxStream(stream, stdoutStream, stderrStream);
 
-            stream.on('end', () => resolve({ stdout: stdoutData, stderr: stderrData }));
-            stream.on('error', (err: Error) => reject(err));
+            stream.on('end', () => {
+                flushBuffer();
+                resolve({ stdout: stdoutData, stderr: stderrData });
+            });
+            stream.on('error', (err: Error) => {
+                flushBuffer();
+                reject(err);
+            });
         });
 
         const result = opts?.signal?.aborted ? { ExitCode: 124 } : await exec.inspect();

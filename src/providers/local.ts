@@ -130,7 +130,7 @@ export class LocalProvider implements EnvironmentProvider {
         return tarProcess.stdout;
     }
 
-    async runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal }): Promise<CommandResult> {
+    async runCommand(workspacePath: string, command: string, env?: Record<string, string>, opts?: { signal?: AbortSignal; onStdoutLine?: (line: string) => void }): Promise<CommandResult> {
         return new Promise((resolve) => {
             const child = spawn(command, {
                 shell: true,
@@ -141,8 +141,20 @@ export class LocalProvider implements EnvironmentProvider {
 
             let stdout = '';
             let stderr = '';
+            let stdoutBuffer = '';
 
-            child.stdout.on('data', (data) => { stdout += data.toString(); });
+            child.stdout.on('data', (data) => {
+                const str = data.toString();
+                stdout += str;
+                if (opts?.onStdoutLine) {
+                    stdoutBuffer += str;
+                    const lines = stdoutBuffer.split('\n');
+                    stdoutBuffer = lines.pop() || '';
+                    for (const line of lines) {
+                        opts.onStdoutLine(line);
+                    }
+                }
+            });
             child.stderr.on('data', (data) => { stderr += data.toString(); });
 
             if (opts?.signal) {
@@ -164,11 +176,20 @@ export class LocalProvider implements EnvironmentProvider {
                 }
             }
 
+            const flushBuffer = () => {
+                if (stdoutBuffer && opts?.onStdoutLine) {
+                    opts.onStdoutLine(stdoutBuffer);
+                    stdoutBuffer = '';
+                }
+            };
+
             child.on('close', (code) => {
+                flushBuffer();
                 resolve({ stdout, stderr, exitCode: opts?.signal?.aborted ? 124 : (code ?? 1) });
             });
 
             child.on('error', () => {
+                flushBuffer();
                 resolve({ stdout, stderr, exitCode: opts?.signal?.aborted ? 124 : 1 });
             });
         });
