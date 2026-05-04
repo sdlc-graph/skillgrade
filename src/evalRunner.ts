@@ -719,7 +719,7 @@ export class EvalRunner {
                                 const isExpected = toolName === opts.expectedSkill || toolName.startsWith(opts.expectedSkill + '_') || toolName.startsWith(opts.expectedSkill + '-');
                                 if (isExpected) {
                                     skillActivationSuccess = true;
-                                    console.log(`\n  Expected skill "${opts.expectedSkill}" activated! Terminating early...`);
+                                    // console.log(`\n  Expected skill "${opts.expectedSkill}" activated! Terminating early...`);
                                     abortController.abort();
                                 } else {
                                     const prohibitedList = opts.prohibitedEventsBeforeActivation || [];
@@ -733,12 +733,12 @@ export class EvalRunner {
                                     }
                                     if (isProhibited) {
                                         skillActivationSuccess = false;
-                                        console.log(`\n  Prohibited event matched pattern "${toolName || trimmed}"! Terminating early...`);
+                                        // console.log(`\n  Prohibited event matched pattern "${toolName || trimmed}"! Terminating early...`);
                                         abortController.abort();
                                     } else {
                                         const cmdDetails = event.parameters?.command || event.args?.command || event.parameters?.cmd || event.args?.cmd || event.parameters?.path || event.args?.path || '';
                                         const detailsSuffix = cmdDetails ? ` ("${cmdDetails}")` : '';
-                                        console.log(`\n  Tool/Skill "${toolName}"${detailsSuffix} called before activation. Continuing execution context loop...`);
+                                        // console.log(`\n  Tool/Skill "${toolName}"${detailsSuffix} called before activation. Continuing execution context loop...`);
                                     }
                                 }
                             }
