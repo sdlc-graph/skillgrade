@@ -250,7 +250,7 @@ function validateConfig(raw: any): EvalConfig {
         }
 
         return {
-            name: t.name || `activate-${t.expectedSkill}-${i}`,
+            name: t.name || `activate-${t.expectedSkill || defaults.expectedSkill}-${i}`,
             instruction: t.instruction,
             expectedSkill: t.expectedSkill,
             trialConfig: t.trialConfig,
